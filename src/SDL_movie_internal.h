@@ -84,6 +84,8 @@ extern "C"
     extern MovieTrack *SDLMovie_GetVideoTrack(SDL_Movie *movie);
     extern MovieTrack *SDLMovie_GetAudioTrack(SDL_Movie *movie);
 
+    extern void SDLMovie_ReadCurrentFrame(SDL_Movie *movie);
+
 #ifdef __cplusplus
 }
 #endif

@@ -54,7 +54,7 @@ int main()
             }
         }
 
-        if (!SDLMovie_DecodeNextFrame(movie))
+        if (!SDLMovie_DecodeFrame(movie))
         {
             std::cerr << "Failed to decode next frame: " << SDLMovie_GetError() << std::endl;
             return 1;

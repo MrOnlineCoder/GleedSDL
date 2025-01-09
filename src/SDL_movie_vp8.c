@@ -53,30 +53,35 @@ bool SDLMovie_Decode_VP8(SDL_Movie *movie)
         movie->current_frame_surface = SDL_CreateSurface(
             img->d_w,
             img->d_h,
-            SDL_PIXELFORMAT_YV12);
+            SDL_PIXELFORMAT_RGB24);
     }
 
     SDL_LockSurface(movie->current_frame_surface);
 
     Uint8 *pixels = (Uint8 *)movie->current_frame_surface->pixels;
 
+    const SDL_PixelFormatDetails *format_details = SDL_GetPixelFormatDetails(
+        SDL_PIXELFORMAT_RGB24);
+
+    // Convert vpx YUV12 to RGB
     for (int y = 0; y < img->d_h; y++)
     {
         for (int x = 0; x < img->d_w; x++)
         {
-            Uint8 *y_plane = img->planes[VPX_PLANE_Y] + y * img->stride[VPX_PLANE_Y] + x;
-            Uint8 *u_plane = img->planes[VPX_PLANE_U] + y / 2 * img->stride[VPX_PLANE_U] + x / 2;
-            Uint8 *v_plane = img->planes[VPX_PLANE_V] + y / 2 * img->stride[VPX_PLANE_V] + x / 2;
+            int yuv_offset = y * img->stride[VPX_PLANE_Y] + x;
+            int rgb_offset = y * movie->current_frame_surface->pitch + x * 4;
 
-            Uint8 y_val = *y_plane;
-            Uint8 u_val = *u_plane;
-            Uint8 v_val = *v_plane;
+            int y_val = img->planes[VPX_PLANE_Y][yuv_offset];
+            int u_val = img->planes[VPX_PLANE_U][yuv_offset / 4];
+            int v_val = img->planes[VPX_PLANE_V][yuv_offset / 4];
 
-            Uint32 loc = y * img->d_w + x;
+            int r = y_val + 1.402 * (v_val - 128);
+            int g = y_val - 0.344136 * (u_val - 128) - 0.714136 * (v_val - 128);
+            int b = y_val + 1.772 * (u_val - 128);
 
-            pixels[loc + 0] = y_val;
-            pixels[loc + 1] = u_val;
-            pixels[loc + 2] = v_val;
+            pixels[rgb_offset] = r;
+            pixels[rgb_offset + 1] = g;
+            pixels[rgb_offset + 2] = b;
         }
     }
 

@@ -82,7 +82,7 @@ SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *rend
 
     SDL_Texture *texture = SDL_CreateTexture(
         renderer,
-        SDL_PIXELFORMAT_YV12,
+        SDL_PIXELFORMAT_XBGR8888,
         SDL_TEXTUREACCESS_STREAMING,
         SDLMovie_GetVideoTrack(movie)->video_width,
         SDLMovie_GetVideoTrack(movie)->video_height);
@@ -190,7 +190,7 @@ bool SDLMovie_HasNextFrame(SDL_Movie *movie)
     return movie && SDLMovie_CanPlayback(movie);
 }
 
-bool SDLMovie_DecodeNextFrame(SDL_Movie *movie)
+bool SDLMovie_DecodeFrame(SDL_Movie *movie)
 {
     if (!movie)
         return false;
@@ -208,8 +208,10 @@ bool SDLMovie_DecodeNextFrame(SDL_Movie *movie)
         movie->current_frame_surface = SDL_CreateSurface(
             video_track->video_width,
             video_track->video_height,
-            SDL_PIXELFORMAT_YV12);
+            SDL_PIXELFORMAT_RGB24);
     }
+
+    SDLMovie_ReadCurrentFrame(movie);
 
     SDLMovie_Decode_VP8(movie);
 
@@ -238,4 +240,20 @@ bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture)
     SDL_UnlockTexture(texture);
 
     return true;
+}
+
+void SDLMovie_ReadCurrentFrame(SDL_Movie *movie)
+{
+    if (!movie)
+        return;
+
+    CachedMovieFrame *frame = &movie->cached_frames[movie->current_video_track][movie->current_frame];
+
+    movie->encoded_video_frame = SDL_realloc(movie->encoded_video_frame, frame->size);
+
+    SDL_SeekIO(movie->io, frame->offset, SDL_IO_SEEK_SET);
+
+    SDL_ReadIO(movie->io, movie->encoded_video_frame, frame->size);
+
+    movie->encoded_video_frame_size = frame->size;
 }

@@ -40,7 +40,7 @@ extern "C"
 
     extern SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *renderer);
     extern bool SDLMovie_HasNextFrame(SDL_Movie *movie);
-    extern bool SDLMovie_DecodeNextFrame(SDL_Movie *movie);
+    extern bool SDLMovie_DecodeFrame(SDL_Movie *movie);
     extern bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture);
     extern SDL_Surface *SDLMovie_GetFrameSurface(SDL_Movie *movie);
     extern void SDLMovie_SeekSeconds(SDL_Movie *movie, float time);
