@@ -160,7 +160,7 @@ extern "C"
      *
      * \param movie SDL_Movie instance
      *
-     * \returns Number of tracks in the movie
+     * \returns Number of tracks in the movie, or 0 if there are no tracks or movie is invalid
      */
     extern int SDLMovie_GetTrackCount(const SDL_Movie *movie);
 
@@ -175,8 +175,10 @@ extern "C"
      * Usually you won't need this to call this manually,
      * as the first available video and audio tracks are selected automatically after opening the movie.
      *
-     * Please note, that the passed track number is not the same as the track index in the movie file,
+     * Please note, that the passed track index is not the same as the track number in the movie file,
      * as some tracks may be skipped (e.g. subtitles or ones which are not supported).
+     *
+     * You can use SDLMovie_GetTrack and SDLMovie_GetTrackCount to query available tracks.
      *
      * \param movie SDL_Movie instance
      * \param type Track type (video or audio)
@@ -193,7 +195,7 @@ extern "C"
      * and independently from the movie.
      * This also means that calling this function again will create a new texture, not updating the existing one.
      *
-     * Texture format is SDL_PIXELFORMAT_XBGR8888, SDL_TEXTUREACCESS_STREAMING access mode
+     * Texture format is SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING access mode
      * and the size is the same as the video frame size.
      *
      * Contents of the texture can be easily updated with SDLMovie_UpdatePlaybackTexture function.
@@ -258,7 +260,7 @@ extern "C"
      * If you are using SDL_Renderer, you may use SDLMovie_CreatePlaybackTexture and SDLMovie_UpdatePlaybackTexture functions
      * respectively to create and update a SDL_Texture for playback.
      *
-     * The format of the surface is SDL_PIXELFORMAT_XBGR8888, and the size is the same as the video frame size.
+     * The format of the surface is SDL_PIXELFORMAT_RGB24, and the size is the same as the video frame size.
      *
      * The surface will be modified by the next call to SDLMovie_DecodeVideoFrame.
      *
@@ -310,7 +312,7 @@ extern "C"
     /**
      * Get the audio samples of the current audio frame
      *
-     * This function returns a pointer to buffer of decoded audio samples for current frame.
+     * This function returns a pointer to buffer of decoded PCM audio samples for current frame.
      * The buffer is valid until the next call to SDLMovie_DecodeAudioFrame.
      *
      * You can directly queue the samples for playback via SDL_PutAudioStreamData into
@@ -347,7 +349,7 @@ extern "C"
      * This function returns the audio spec for the currently selected audio track in the movie.
      * The resulting samples from SDLMovie_GetAudioSamples will follow this spec.
      *
-     * You may use pass this audio spec to SDL Audio functions to create a matching audio stream/device.
+     * You may pass this audio spec to SDL Audio functions to create a matching audio stream/device.
      *
      * If there is no audio track selected, it will return NULL.
      *

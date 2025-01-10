@@ -55,6 +55,7 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
         return NULL;
     }
 
+    /* Pre-select default tracks if possible */
     if (movie->ntracks > 0)
     {
         for (int i = 0; i < movie->ntracks; i++)
@@ -126,7 +127,7 @@ SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *rend
 
     SDL_Texture *texture = SDL_CreateTexture(
         renderer,
-        SDL_PIXELFORMAT_XBGR8888,
+        SDL_PIXELFORMAT_RGB24,
         SDL_TEXTUREACCESS_STREAMING,
         SDLMovie_GetVideoTrack(movie)->video_width,
         SDLMovie_GetVideoTrack(movie)->video_height);
@@ -263,8 +264,6 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
         movie->audio_spec.channels = new_audio_track->audio_channels;
         movie->audio_spec.freq = new_audio_track->audio_sample_frequency;
         movie->audio_spec.format = SDL_AUDIO_F32;
-
-        SDLMovie_PreloadAudioStream(movie);
     }
 }
 
