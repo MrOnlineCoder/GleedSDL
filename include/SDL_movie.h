@@ -56,7 +56,7 @@ extern "C"
 
     extern bool SDLMovie_HasNextAudioFrame(SDL_Movie *movie);
     extern bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie);
-    extern const SDL_MovieAudioSample *SDLMovie_GetAudioBuffer(SDL_Movie *movie, size_t *size);
+    extern const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *size, int *count);
     extern void SDLMovie_NextAudioFrame(SDL_Movie *movie);
     extern const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie);
 

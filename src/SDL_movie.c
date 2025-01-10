@@ -3,12 +3,14 @@
 
 static char sdl_movie_error[1024] = {0};
 
-void SDLMovie_SetError(const char *fmt, ...)
+bool SDLMovie_SetError(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
     SDL_vsnprintf(sdl_movie_error, sizeof(sdl_movie_error), fmt, ap);
     va_end(ap);
+
+    return false;
 }
 
 const char *SDLMovie_GetError()
@@ -222,6 +224,14 @@ static SDL_MovieCodecType SDLMovie_GetTrackCodec(MovieTrack *track)
 void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
 {
     if (!movie)
+        return;
+
+    if (track < 0)
+        return;
+    if (track >= movie->ntracks)
+        return;
+
+    if (movie->tracks[track].type != type)
         return;
 
     if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
@@ -466,14 +476,18 @@ bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie)
     return false;
 }
 
-const SDL_MovieAudioSample *SDLMovie_GetAudioBuffer(SDL_Movie *movie, size_t *size)
+const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *size, int *count)
 {
     if (!movie || !movie->decoded_audio_frame)
     {
         return NULL;
     }
 
-    *size = movie->decoded_audio_frame_size;
+    if (size)
+        *size = movie->decoded_audio_samples * sizeof(SDL_MovieAudioSample) * movie->audio_spec.channels;
+
+    if (count)
+        *count = movie->decoded_audio_samples;
 
     return movie->decoded_audio_frame;
 }
@@ -549,9 +563,10 @@ void *SDLMovie_ReadEncodedAudioData(SDL_Movie *movie, void *dest, int size)
 
     Uint8 *data = movie->encoded_audio_buffer + movie->encoded_audio_buffer_cursor;
 
-    SDL_memcpy(dest, data, size);
+    if (dest)
+        SDL_memcpy(dest, data, size);
 
-    movie->encoded_audio_buffer_cursor += size;
+    // movie->encoded_audio_buffer_cursor += size;
 
     return data;
 }

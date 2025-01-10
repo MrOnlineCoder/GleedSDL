@@ -65,7 +65,6 @@ set(LIB_SOURCES
     src/SDL_movie_vp8.c
     src/SDL_movie.c
     src/SDL_movie_vorbis.c
-    src/stb_vorbis_impl.c
 )
 
 add_library(
@@ -78,9 +77,6 @@ target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx vorbis)
 target_include_directories(SDL_movie PRIVATE ${libwebm_SOURCE_DIR}/webm_parser/include)
 
 target_include_directories(SDL_movie PUBLIC include/)
-target_include_directories(SDL_movie PRIVATE external/)
-
-target_link_options(SDL_movie PUBLIC -v)
 
 option(SDL_MOVIE_BUILD_EXAMPLES "Build examples" ON)
 

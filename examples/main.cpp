@@ -36,7 +36,9 @@ int main()
         return 1;
     }
 
-    SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, SDLMovie_GetAudioSpec(movie), NULL, NULL);
+    const SDL_AudioSpec *movie_audio_spec = SDLMovie_GetAudioSpec(movie);
+    SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, movie_audio_spec, NULL, NULL);
+    SDL_ResumeAudioStreamDevice(audio_stream);
 
     if (!audio_stream)
     {
@@ -51,6 +53,8 @@ int main()
         renderer);
 
     SDL_Event ev;
+    bool shouldIterate = false;
+    bool test = false;
     while (running)
     {
         while (SDL_PollEvent(&ev))
@@ -67,10 +71,23 @@ int main()
                 {
                     SDLMovie_SeekFrame(movie, 0);
                 }
+
+                if (ev.key.key == SDLK_SPACE)
+                {
+                    shouldIterate = true;
+                }
+            }
+
+            if (ev.type == SDL_EVENT_KEY_UP)
+            {
+                if (ev.key.key == SDLK_SPACE)
+                {
+                    shouldIterate = false;
+                }
             }
         }
 
-        if (SDLMovie_HasNextVideoFrame(movie))
+        if (shouldIterate && SDLMovie_HasNextVideoFrame(movie))
         {
             if (!SDLMovie_DecodeVideoFrame(movie))
             {
@@ -89,7 +106,7 @@ int main()
             SDLMovie_NextVideoFrame(movie);
         }
 
-        if (SDLMovie_HasNextAudioFrame(movie))
+        if (shouldIterate && !test && SDLMovie_HasNextAudioFrame(movie))
         {
             if (!SDLMovie_DecodeAudioFrame(movie))
             {
@@ -98,10 +115,18 @@ int main()
             }
 
             size_t sz;
-            const SDL_MovieAudioSample *audio_buffer = SDLMovie_GetAudioBuffer(movie, &sz);
+            int samples;
+            const SDL_MovieAudioSample *audio_buffer = SDLMovie_GetAudioSamples(movie, &sz, &samples);
 
             if (audio_buffer)
             {
+                // printf("Samples: %d\n", samples);
+                // for (int i = 0; i < samples; i++)
+                // {
+                //     printf("%.3f ", audio_buffer[i]);
+                // }
+                // printf("\n");
+
                 SDL_PutAudioStreamData(audio_stream, audio_buffer, sz);
             }
 
@@ -124,6 +149,7 @@ int main()
     SDLMovie_Free(movie, true);
     SDL_DestroyTexture(movieFrameTexture);
     SDL_DestroyRenderer(renderer);
+    SDL_FlushAudioStream(audio_stream);
     SDL_DestroyAudioStream(audio_stream);
     SDL_DestroyWindow(window);
     SDL_Quit();

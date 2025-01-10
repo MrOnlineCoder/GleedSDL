@@ -69,6 +69,7 @@ extern "C"
         Uint64 encoded_audio_buffer_cursor;
 
         SDL_MovieAudioSample *decoded_audio_frame;
+        int decoded_audio_samples;
         Uint64 decoded_audio_frame_size;
         void *vorbis_context;
         SDL_AudioSpec audio_spec;
@@ -106,7 +107,7 @@ extern "C"
     extern VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie);
     extern void SDLMovie_Close_Vorbis(SDL_Movie *movie);
 
-    extern void SDLMovie_SetError(const char *fmt, ...);
+    extern bool SDLMovie_SetError(const char *fmt, ...);
 
     extern void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint64 offset, Uint64 size);
 
