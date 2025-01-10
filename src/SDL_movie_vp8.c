@@ -7,7 +7,7 @@
 static vpx_codec_iface_t *vp8 = NULL;
 static vpx_codec_ctx_t codec;
 
-// Stolen from libvpx/tools_common.c
+/* Stolen from libvpx/tools_common.c */
 static int vpx_img_plane_width(const vpx_image_t *img, int plane)
 {
     if (plane > 0 && img->x_chroma_shift > 0)

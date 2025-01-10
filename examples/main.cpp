@@ -1,3 +1,11 @@
+/*
+    SDL_Movie Example
+
+    It plays a classical Big Buck Bunny trailer in WebM format (bunny.webm)
+
+    You can press '0' on the keyboard to restart the movie from the beginning.
+*/
+
 #include <iostream>
 #include <fstream>
 #include <SDL3/SDL.h>
@@ -6,6 +14,7 @@
 
 int main()
 {
+    /* Standard SDL initialization */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
     {
         std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
@@ -28,17 +37,28 @@ int main()
         return 1;
     }
 
-    SDL_Movie *movie = SDLMovie_Open("bunny2.webm");
+    /*
+        Open a WebM movie from file
+
+        This will parse the WebM file, and pre-select first available video and audio tracks.
+    */
+    SDL_Movie *movie = SDLMovie_Open("bunny.webm");
 
     if (!movie)
     {
+        /* Any SDL_Movie error can be retrieved with SDLMovie_GetError() */
         std::cerr << SDLMovie_GetError() << std::endl;
         return 1;
     }
 
     const SDL_AudioSpec *movie_audio_spec = SDLMovie_GetAudioSpec(movie);
+
+    /*
+        Here we open an audio stream and device, matching the audio spec of the movie.
+
+        Please make sure to check if movie_audio_spec is not NULL in case you are not sure if the movie has audio.
+    */
     SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, movie_audio_spec, NULL, NULL);
-    SDL_ResumeAudioStreamDevice(audio_stream);
 
     if (!audio_stream)
     {
@@ -46,15 +66,21 @@ int main()
         return 1;
     }
 
+    /* SDL creates audio stream device in paused mode by default, so we must resume it */
+    SDL_ResumeAudioStreamDevice(audio_stream);
+
     bool running = true;
 
+    /*
+        This is a helper method that allows creating a texture for rendering video frames with SDL_Renderer.
+
+        Note that it's users responsibility to destroy the texture when it's no longer needed.
+    */
     SDL_Texture *movieFrameTexture = SDLMovie_CreatePlaybackTexture(
         movie,
         renderer);
 
     SDL_Event ev;
-    bool shouldIterate = false;
-    bool test = false;
     while (running)
     {
         while (SDL_PollEvent(&ev))
@@ -69,26 +95,16 @@ int main()
             {
                 if (ev.key.key == SDLK_0)
                 {
+                    /* Seek to start */
                     SDLMovie_SeekFrame(movie, 0);
-                }
-
-                if (ev.key.key == SDLK_SPACE)
-                {
-                    shouldIterate = true;
-                }
-            }
-
-            if (ev.type == SDL_EVENT_KEY_UP)
-            {
-                if (ev.key.key == SDLK_SPACE)
-                {
-                    shouldIterate = false;
                 }
             }
         }
 
-        if (shouldIterate && SDLMovie_HasNextVideoFrame(movie))
+        /* Video decoding*/
+        if (SDLMovie_HasNextVideoFrame(movie))
         {
+            /* Decode current frame */
             if (!SDLMovie_DecodeVideoFrame(movie))
             {
                 std::cerr << "Failed to decode next frame: " << SDLMovie_GetError() << std::endl;
@@ -97,17 +113,21 @@ int main()
 
             printf("Frame %llu decoded in %llu ms\n", SDLMovie_GetCurrentFrame(movie), SDLMovie_GetLastFrameDecodeTime(movie));
 
+            /* Update playback texture */
             if (!SDLMovie_UpdatePlaybackTexture(movie, movieFrameTexture))
             {
                 std::cerr << "Failed to update playback texture: " << SDLMovie_GetError() << std::endl;
                 return 1;
             }
 
+            /* Advance to next frame */
             SDLMovie_NextVideoFrame(movie);
         }
 
-        if (shouldIterate && !test && SDLMovie_HasNextAudioFrame(movie))
+        /* Audio decoding */
+        if (SDLMovie_HasNextAudioFrame(movie))
         {
+            /* Decode current audio frame*/
             if (!SDLMovie_DecodeAudioFrame(movie))
             {
                 std::cerr << "Failed to decode next audio frame: " << SDLMovie_GetError() << std::endl;
@@ -115,22 +135,19 @@ int main()
             }
 
             size_t sz;
-            int samples;
-            const SDL_MovieAudioSample *audio_buffer = SDLMovie_GetAudioSamples(movie, &sz, &samples);
+            int samples_count;
 
-            if (audio_buffer)
+            /*
+                Obtain audio samples from the movie and send them to audio stream.
+            */
+            const SDL_MovieAudioSample *samples = SDLMovie_GetAudioSamples(movie, &sz, &samples_count);
+
+            if (samples)
             {
-                // printf("Samples: %d\n", samples);
-                // for (int i = 0; i < samples; i++)
-                // {
-                //     printf("%.3f ", audio_buffer[i]);
-                // }
-                // printf("\n");
-
-                SDL_PutAudioStreamData(audio_stream, audio_buffer, sz);
-                printf("Put %d samples\n", samples);
+                SDL_PutAudioStreamData(audio_stream, samples, sz);
             }
 
+            /* Advance to next audio frame */
             SDLMovie_NextAudioFrame(movie);
         }
 
@@ -142,11 +159,14 @@ int main()
         dst.h = ih;
 
         SDL_RenderClear(renderer);
+
+        /* Render the movie video frame, contained in our playback texture */
         SDL_RenderTexture(renderer, movieFrameTexture, NULL, &dst);
         SDL_RenderPresent(renderer);
-        SDL_Delay(16); // 30 FPS
+        SDL_Delay(16); // 60 FPS
     }
 
+    /* Don't forget to free movie resources after finishing playback */
     SDLMovie_Free(movie, true);
     SDL_DestroyTexture(movieFrameTexture);
     SDL_DestroyRenderer(renderer);

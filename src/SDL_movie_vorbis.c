@@ -15,7 +15,7 @@ typedef struct
 
 static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
 {
-    MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
     if (!audio_track->codec_private_data)
     {
         return SDLMovie_SetError("No codec private data available for Vorbis audio track");
@@ -98,7 +98,7 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
 
 VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
 {
-    MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
 
     if (!movie->vorbis_context)
     {

@@ -59,7 +59,7 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
     {
         for (int i = 0; i < movie->ntracks; i++)
         {
-            MovieTrack *tr = &movie->tracks[i];
+            SDL_MovieTrack *tr = &movie->tracks[i];
             if (tr->type == SDL_MOVIE_TRACK_TYPE_VIDEO && movie->current_video_track == SDL_MOVIE_NO_TRACK)
             {
                 SDLMovie_SelectTrack(movie, SDL_MOVIE_TRACK_TYPE_VIDEO, i);
@@ -197,7 +197,7 @@ bool SDLMovie_CanPlaybackAudio(SDL_Movie *movie)
     return movie && movie->ntracks > 0 && movie->total_audio_frames > 0 && movie->current_audio_track != SDL_MOVIE_NO_TRACK;
 }
 
-static SDL_MovieCodecType SDLMovie_GetTrackCodec(MovieTrack *track)
+static SDL_MovieCodecType SDLMovie_GetTrackCodec(SDL_MovieTrack *track)
 {
     if (SDL_strncmp(track->codec_id, "V_VP8", 32) == 0)
     {
@@ -238,7 +238,7 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
     {
         movie->current_video_track = track;
 
-        MovieTrack *new_video_track = SDLMovie_GetVideoTrack(movie);
+        SDL_MovieTrack *new_video_track = SDLMovie_GetVideoTrack(movie);
 
         movie->video_codec = SDLMovie_GetTrackCodec(new_video_track);
         movie->total_frames = new_video_track->total_frames;
@@ -257,7 +257,7 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
     {
         movie->current_audio_track = track;
 
-        MovieTrack *new_audio_track = SDLMovie_GetAudioTrack(movie);
+        SDL_MovieTrack *new_audio_track = SDLMovie_GetAudioTrack(movie);
         movie->audio_codec = SDLMovie_GetTrackCodec(new_audio_track);
         movie->total_audio_frames = new_audio_track->total_frames;
         movie->audio_spec.channels = new_audio_track->audio_channels;
@@ -268,14 +268,14 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
     }
 }
 
-MovieTrack *SDLMovie_GetVideoTrack(SDL_Movie *movie)
+SDL_MovieTrack *SDLMovie_GetVideoTrack(SDL_Movie *movie)
 {
     if (!movie)
         return NULL;
 
     return &movie->tracks[movie->current_video_track];
 }
-MovieTrack *SDLMovie_GetAudioTrack(SDL_Movie *movie)
+SDL_MovieTrack *SDLMovie_GetAudioTrack(SDL_Movie *movie)
 {
     if (!movie)
         return NULL;
@@ -299,7 +299,7 @@ bool SDLMovie_DecodeVideoFrame(SDL_Movie *movie)
         return false;
     }
 
-    MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
+    SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
 
     SDLMovie_ReadCurrentFrame(movie, SDL_MOVIE_TRACK_TYPE_VIDEO);
 
@@ -324,6 +324,13 @@ bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture)
     if (!movie->current_frame_surface)
     {
         SDLMovie_SetError("No frame available, you must decode a frame first");
+        return false;
+    }
+
+    if (texture->format != movie->current_frame_surface->format)
+    {
+        SDLMovie_SetError("Texture format does not match video frame format, provided = %d, required = %d",
+                          texture->format, movie->current_frame_surface->format);
         return false;
     }
 
@@ -388,11 +395,15 @@ Uint64 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie)
 
 Uint64 SDLMovie_GetTotalFrames(SDL_Movie *movie)
 {
+    if (!movie)
+        return 0;
     return movie->total_frames;
 }
 
 Uint64 SDLMovie_GetCurrentFrame(SDL_Movie *movie)
 {
+    if (!movie)
+        return 0;
     return movie->current_frame;
 }
 
@@ -415,13 +426,18 @@ void SDLMovie_NextVideoFrame(SDL_Movie *movie)
 
 void SDLMovie_GetVideoSize(SDL_Movie *movie, int *w, int *h)
 {
-    if (!movie || !w || !h)
+    if (!movie)
         return;
 
-    MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
+    if (movie->current_video_track == SDL_MOVIE_NO_TRACK)
+        return;
 
-    *w = video_track->video_width;
-    *h = video_track->video_height;
+    SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
+
+    if (w)
+        *w = video_track->video_width;
+    if (h)
+        *h = video_track->video_height;
 }
 
 const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie)
@@ -526,7 +542,7 @@ void SDLMovie_PreloadAudioStream(SDL_Movie *movie)
     if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
         return;
 
-    MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
 
     Uint64 buffer_size = audio_track->total_bytes;
 
@@ -566,7 +582,22 @@ void *SDLMovie_ReadEncodedAudioData(SDL_Movie *movie, void *dest, int size)
     if (dest)
         SDL_memcpy(dest, data, size);
 
-    // movie->encoded_audio_buffer_cursor += size;
-
     return data;
+}
+
+const SDL_MovieTrack *SDLMovie_GetTrack(const SDL_Movie *movie, int index)
+{
+    if (!movie || index < 0 || index >= movie->ntracks)
+    {
+        return NULL;
+    }
+
+    return &movie->tracks[index];
+}
+
+int SDLMovie_GetTrackCount(const SDL_Movie *movie)
+{
+    if (!movie)
+        return 0;
+    return movie->ntracks;
 }

@@ -185,7 +185,7 @@ public:
             return webm::Status(webm::Status::kOkCompleted);
         }
 
-        MovieTrack *mt = &m_movie->tracks[m_movie->ntracks];
+        SDL_MovieTrack *mt = &m_movie->tracks[m_movie->ntracks];
 
         m_movie->ntracks++;
 
