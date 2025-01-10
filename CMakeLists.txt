@@ -5,6 +5,7 @@ include(FetchContent)
 cmake_policy(SET CMP0074 NEW)
 
 set(SDL_REQUIRED_VERSION 3.0.0)
+set(C_STANDARD 99)
 
 set(CMAKE_BUILD_TYPE Debug)
 
@@ -36,6 +37,26 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libwebm)
 
+FetchContent_Declare(
+    libogg
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+    GIT_REPOSITORY "https://github.com/xiph/ogg"
+    GIT_TAG "v1.3.5"
+)
+FetchContent_MakeAvailable(libogg)
+
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_FRAMEWORK OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    libvorbis
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+    GIT_REPOSITORY "https://github.com/xiph/vorbis"
+    GIT_TAG "v1.3.7"
+)
+FetchContent_MakeAvailable(libvorbis)
+
 
 include(libvpx.cmake)
 
@@ -43,6 +64,8 @@ set(LIB_SOURCES
     src/SDL_movie_webm.cpp
     src/SDL_movie_vp8.c
     src/SDL_movie.c
+    src/SDL_movie_vorbis.c
+    src/stb_vorbis_impl.c
 )
 
 add_library(
@@ -51,10 +74,11 @@ add_library(
     ${LIB_SOURCES}
 )
 
-target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx)
+target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx vorbis)
 target_include_directories(SDL_movie PRIVATE ${libwebm_SOURCE_DIR}/webm_parser/include)
 
 target_include_directories(SDL_movie PUBLIC include/)
+target_include_directories(SDL_movie PRIVATE external/)
 
 target_link_options(SDL_movie PUBLIC -v)
 

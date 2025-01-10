@@ -28,11 +28,19 @@ int main()
         return 1;
     }
 
-    SDL_Movie *movie = SDLMovie_Open("bunny.webm");
+    SDL_Movie *movie = SDLMovie_Open("bunny2.webm");
 
     if (!movie)
     {
-        std::cerr << "Failed to open movie: " << SDLMovie_GetError() << std::endl;
+        std::cerr << SDLMovie_GetError() << std::endl;
+        return 1;
+    }
+
+    SDL_AudioStream *audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, SDLMovie_GetAudioSpec(movie), NULL, NULL);
+
+    if (!audio_stream)
+    {
+        std::cerr << "Failed to open audio stream: " << SDL_GetError() << std::endl;
         return 1;
     }
 
@@ -52,29 +60,71 @@ int main()
                 running = false;
                 break;
             }
+
+            if (ev.type == SDL_EVENT_KEY_DOWN)
+            {
+                if (ev.key.key == SDLK_0)
+                {
+                    SDLMovie_SeekFrame(movie, 0);
+                }
+            }
         }
 
-        if (!SDLMovie_DecodeFrame(movie))
+        if (SDLMovie_HasNextVideoFrame(movie))
         {
-            std::cerr << "Failed to decode next frame: " << SDLMovie_GetError() << std::endl;
-            return 1;
+            if (!SDLMovie_DecodeVideoFrame(movie))
+            {
+                std::cerr << "Failed to decode next frame: " << SDLMovie_GetError() << std::endl;
+                return 1;
+            }
+
+            printf("Frame %llu decoded in %llu ms\n", SDLMovie_GetCurrentFrame(movie), SDLMovie_GetLastFrameDecodeTime(movie));
+
+            if (!SDLMovie_UpdatePlaybackTexture(movie, movieFrameTexture))
+            {
+                std::cerr << "Failed to update playback texture: " << SDLMovie_GetError() << std::endl;
+                return 1;
+            }
+
+            SDLMovie_NextVideoFrame(movie);
         }
 
-        if (!SDLMovie_UpdatePlaybackTexture(movie, movieFrameTexture))
+        if (SDLMovie_HasNextAudioFrame(movie))
         {
-            std::cerr << "Failed to update playback texture: " << SDLMovie_GetError() << std::endl;
-            return 1;
+            if (!SDLMovie_DecodeAudioFrame(movie))
+            {
+                std::cerr << "Failed to decode next audio frame: " << SDLMovie_GetError() << std::endl;
+                return 1;
+            }
+
+            size_t sz;
+            const SDL_MovieAudioSample *audio_buffer = SDLMovie_GetAudioBuffer(movie, &sz);
+
+            if (audio_buffer)
+            {
+                SDL_PutAudioStreamData(audio_stream, audio_buffer, sz);
+            }
+
+            SDLMovie_NextAudioFrame(movie);
         }
+
+        int iw, ih;
+        SDLMovie_GetVideoSize(movie, &iw, &ih);
+
+        SDL_FRect dst = {};
+        dst.w = iw;
+        dst.h = ih;
 
         SDL_RenderClear(renderer);
-        SDL_RenderTexture(renderer, movieFrameTexture, NULL, NULL);
+        SDL_RenderTexture(renderer, movieFrameTexture, NULL, &dst);
         SDL_RenderPresent(renderer);
         SDL_Delay(30); // 30 FPS
     }
 
-    SDLMovie_Free(movie);
+    SDLMovie_Free(movie, true);
     SDL_DestroyTexture(movieFrameTexture);
     SDL_DestroyRenderer(renderer);
+    SDL_DestroyAudioStream(audio_stream);
     SDL_DestroyWindow(window);
     SDL_Quit();
 

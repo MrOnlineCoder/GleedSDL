@@ -115,6 +115,7 @@ public:
         }
 
         m_currentBlockTrack = SDLMovie_FindTrackByNumber(m_movie, simple_block.track_number);
+        m_currentBlockTimecode = simple_block.timecode;
         *action = m_currentBlockTrack >= 0 ? webm::Action::kRead : webm::Action::kSkip;
         return webm::Status(webm::Status::kOkCompleted);
     }
@@ -135,7 +136,7 @@ public:
         }
 
         m_currentBlockTrack = SDLMovie_FindTrackByNumber(m_movie, block.track_number);
-
+        m_currentBlockTimecode = block.timecode;
         *action = m_currentBlockTrack >= 0 ? webm::Action::kRead : webm::Action::kSkip;
         return webm::Status(webm::Status::kOkCompleted);
     }
@@ -147,7 +148,7 @@ public:
         {
             SDLMovie_AddCachedFrame(
                 m_movie,
-                m_currentBlockTrack, 0, metadata.position, metadata.size);
+                m_currentBlockTrack, m_currentBlockTimecode, metadata.position, metadata.size);
         }
 
         return Skip(reader, bytes_remaining);
@@ -223,6 +224,19 @@ public:
             mt->audio_bit_depth = audio.bit_depth.value();
         }
 
+        if (track_entry.codec_private.is_present())
+        {
+            const auto &codecPrivate = track_entry.codec_private.value();
+            const auto codecPrivateData = codecPrivate.data();
+            const auto codecPrivateSize = codecPrivate.size();
+            if (codecPrivateSize > 0)
+            {
+                mt->codec_private_data = (Uint8 *)SDL_malloc(codecPrivateSize);
+                SDL_memcpy(mt->codec_private_data, codecPrivateData, codecPrivateSize);
+                mt->codec_private_size = codecPrivateSize;
+            }
+        }
+
         return webm::Status(webm::Status::kOkCompleted);
     }
 
@@ -230,6 +244,7 @@ private:
     SDL_Movie *m_movie;
 
     int m_currentBlockTrack;
+    Uint64 m_currentBlockTimecode;
 };
 
 extern "C"

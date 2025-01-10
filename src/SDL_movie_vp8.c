@@ -7,8 +7,60 @@
 static vpx_codec_iface_t *vp8 = NULL;
 static vpx_codec_ctx_t codec;
 
+// Stolen from libvpx/tools_common.c
+static int vpx_img_plane_width(const vpx_image_t *img, int plane)
+{
+    if (plane > 0 && img->x_chroma_shift > 0)
+        return (img->d_w + 1) >> img->x_chroma_shift;
+    else
+        return img->d_w;
+}
+
+static int vpx_img_plane_height(const vpx_image_t *img, int plane)
+{
+    if (plane > 0 && img->y_chroma_shift > 0)
+        return (img->d_h + 1) >> img->y_chroma_shift;
+    else
+        return img->d_h;
+}
+
+static SDL_PixelFormat vpx_format_to_sdl_format(vpx_img_fmt_t fmt)
+{
+    switch (fmt)
+    {
+    case VPX_IMG_FMT_NONE:
+        return SDL_PIXELFORMAT_UNKNOWN;
+    case VPX_IMG_FMT_YV12:
+        return SDL_PIXELFORMAT_YV12;
+    case VPX_IMG_FMT_I420:
+        return SDL_PIXELFORMAT_IYUV;
+    case VPX_IMG_FMT_I422:
+        return SDL_PIXELFORMAT_YVYU;
+    default:
+        return SDL_PIXELFORMAT_YV12;
+    }
+}
+
+static SDL_Colorspace vpx_cs_to_sdl_cs(vpx_color_space_t cs)
+{
+    switch (cs)
+    {
+    case VPX_CS_BT_2020:
+        return SDL_COLORSPACE_BT2020_FULL;
+    case VPX_CS_BT_601:
+        return SDL_COLORSPACE_BT601_FULL;
+    case VPX_CS_BT_709:
+        return SDL_COLORSPACE_BT709_FULL;
+    case VPX_CS_SRGB:
+        return SDL_COLORSPACE_SRGB;
+    default:
+        return SDL_COLORSPACE_YUV_DEFAULT;
+    }
+}
+
 bool SDLMovie_Decode_VP8(SDL_Movie *movie)
 {
+    Uint64 decode_start = SDL_GetTicksNS();
     if (!vp8)
     {
         vp8 = vpx_codec_vp8_dx();
@@ -56,36 +108,89 @@ bool SDLMovie_Decode_VP8(SDL_Movie *movie)
             SDL_PIXELFORMAT_RGB24);
     }
 
-    SDL_LockSurface(movie->current_frame_surface);
-
-    Uint8 *pixels = (Uint8 *)movie->current_frame_surface->pixels;
-
-    const SDL_PixelFormatDetails *format_details = SDL_GetPixelFormatDetails(
+    const SDL_PixelFormatDetails *rgb_format_details = SDL_GetPixelFormatDetails(
         SDL_PIXELFORMAT_RGB24);
 
-    // Convert vpx YUV12 to RGB
-    for (int y = 0; y < img->d_h; y++)
+    const SDL_PixelFormatDetails *vpx_format_details = SDL_GetPixelFormatDetails(
+        vpx_format_to_sdl_format(img->fmt));
+
+    SDL_Colorspace vpx_colorspace = vpx_cs_to_sdl_cs(img->cs);
+
+    size_t buffer_size = 0;
+
+    for (int plane = 0; plane < 3; plane++)
     {
-        for (int x = 0; x < img->d_w; x++)
+        buffer_size += vpx_img_plane_height(img, plane) * img->stride[plane];
+    }
+
+    if (!movie->conversion_video_frame_buffer)
+    {
+        movie->conversion_video_frame_buffer = (Uint8 *)SDL_calloc(
+            1, buffer_size);
+        movie->conversion_video_frame_buffer_size = buffer_size;
+    }
+    else if (movie->conversion_video_frame_buffer_size < buffer_size)
+    {
+        movie->conversion_video_frame_buffer = (Uint8 *)SDL_realloc(
+            movie->conversion_video_frame_buffer, buffer_size);
+        movie->conversion_video_frame_buffer_size = buffer_size;
+    }
+
+    Uint8 *convert_buffer = (Uint8 *)SDL_calloc(
+        1, buffer_size);
+
+    Uint8 *convert_buffer_write_ptr = convert_buffer;
+
+    size_t bytes_copied = 0;
+
+    for (int plane = 0; plane < 3; plane++)
+    {
+        const int plane_height = vpx_img_plane_height(img, plane);
+        const int plane_width = vpx_img_plane_width(img, plane);
+        const int row_size_bytes = img->stride[plane];
+
+        for (int y = 0; y < plane_height; y++)
         {
-            int yuv_offset = y * img->stride[VPX_PLANE_Y] + x;
-            int rgb_offset = y * movie->current_frame_surface->pitch + x * 4;
-
-            int y_val = img->planes[VPX_PLANE_Y][yuv_offset];
-            int u_val = img->planes[VPX_PLANE_U][yuv_offset / 4];
-            int v_val = img->planes[VPX_PLANE_V][yuv_offset / 4];
-
-            int r = y_val + 1.402 * (v_val - 128);
-            int g = y_val - 0.344136 * (u_val - 128) - 0.714136 * (v_val - 128);
-            int b = y_val + 1.772 * (u_val - 128);
-
-            pixels[rgb_offset] = r;
-            pixels[rgb_offset + 1] = g;
-            pixels[rgb_offset + 2] = b;
+            SDL_memcpy(
+                convert_buffer_write_ptr,
+                img->planes[plane] + y * img->stride[plane],
+                row_size_bytes);
+            convert_buffer_write_ptr += row_size_bytes;
+            bytes_copied += row_size_bytes;
         }
     }
 
+    SDL_assert(convert_buffer_write_ptr - convert_buffer == buffer_size);
+    SDL_assert(bytes_copied == buffer_size);
+
+    SDL_LockSurface(movie->current_frame_surface);
+
+    if (!SDL_ConvertPixelsAndColorspace(
+            img->d_w,
+            img->d_h,
+            vpx_format_details->format,
+            vpx_colorspace,
+            0,
+            convert_buffer,
+            img->stride[0],
+            rgb_format_details->format,
+            SDL_GetSurfaceColorspace(movie->current_frame_surface),
+            0,
+            movie->current_frame_surface->pixels,
+            movie->current_frame_surface->pitch))
+    {
+        SDLMovie_SetError("Failed to convert VP8 frame to RGB: %s", SDL_GetError());
+        SDL_free(convert_buffer);
+
+        return false;
+    }
+
     SDL_UnlockSurface(movie->current_frame_surface);
+
+    SDL_free(convert_buffer);
+
+    movie->last_frame_decode_ms = SDL_GetTicksNS() - decode_start;
+    movie->last_frame_decode_ms /= 1000000;
 
     return true;
 }

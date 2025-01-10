@@ -18,20 +18,34 @@ const char *SDLMovie_GetError()
 
 SDL_Movie *SDLMovie_Open(const char *file)
 {
-    return SDLMovie_OpenIO(
-        SDL_IOFromFile(file, "rb"));
+    SDL_IOStream *stream = SDL_IOFromFile(file, "rb");
+
+    if (!stream)
+    {
+        SDLMovie_SetError("Failed to open movie file %s:", SDL_GetError());
+        return NULL;
+    }
+
+    return SDLMovie_OpenIO(stream);
 }
 
 SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
 {
     if (!io)
+    {
         return NULL;
+    }
 
     SDL_Movie *movie = SDL_calloc(1, sizeof(SDL_Movie));
     if (!movie)
+    {
+        SDLMovie_SetError("Failed to allocate memory for movie");
         return NULL;
+    }
 
     movie->io = io;
+    movie->current_audio_track = SDL_MOVIE_NO_TRACK;
+    movie->current_video_track = SDL_MOVIE_NO_TRACK;
 
     if (!SDLMovie_Parse_WebM(movie))
     {
@@ -39,18 +53,18 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
         return NULL;
     }
 
-    if (SDLMovie_CanPlayback(movie))
+    if (movie->ntracks > 0)
     {
         for (int i = 0; i < movie->ntracks; i++)
         {
             MovieTrack *tr = &movie->tracks[i];
-            if (tr->type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+            if (tr->type == SDL_MOVIE_TRACK_TYPE_VIDEO && movie->current_video_track == SDL_MOVIE_NO_TRACK)
             {
-                movie->current_video_track = i;
+                SDLMovie_SelectTrack(movie, SDL_MOVIE_TRACK_TYPE_VIDEO, i);
             }
-            else if (tr->type == SDL_MOVIE_TRACK_TYPE_AUDIO)
+            else if (tr->type == SDL_MOVIE_TRACK_TYPE_AUDIO && movie->current_audio_track == SDL_MOVIE_NO_TRACK)
             {
-                movie->current_audio_track = i;
+                SDLMovie_SelectTrack(movie, SDL_MOVIE_TRACK_TYPE_AUDIO, i);
             }
         }
     }
@@ -58,7 +72,7 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
     return movie;
 }
 
-void SDLMovie_Free(SDL_Movie *movie)
+void SDLMovie_Free(SDL_Movie *movie, bool closeio)
 {
     if (!movie)
         return;
@@ -66,9 +80,37 @@ void SDLMovie_Free(SDL_Movie *movie)
     for (int i = 0; i < movie->ntracks; i++)
     {
         SDL_free(movie->cached_frames[i]);
+
+        if (movie->tracks[i].codec_private_data)
+        {
+            SDL_free(movie->tracks[i].codec_private_data);
+        }
     }
 
-    SDL_CloseIO(movie->io);
+    if (movie->conversion_video_frame_buffer)
+    {
+        SDL_free(movie->conversion_video_frame_buffer);
+    }
+
+    if (movie->encoded_video_frame)
+    {
+        SDL_free(movie->encoded_video_frame);
+    }
+
+    if (movie->current_frame_surface)
+    {
+        SDL_DestroySurface(movie->current_frame_surface);
+    }
+
+    if (movie->encoded_audio_buffer)
+    {
+        SDL_free(movie->encoded_audio_buffer);
+    }
+
+    SDLMovie_Close_Vorbis(movie);
+
+    if (closeio)
+        SDL_CloseIO(movie->io);
     SDL_free(movie);
 }
 
@@ -127,10 +169,8 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
         movie->total_time = timecode;
     }
 
-    if (last_frame_index > movie->tracks[track].total_frames)
-    {
-        movie->tracks[track].total_frames = last_frame_index;
-    }
+    movie->tracks[track].total_frames++;
+    movie->tracks[track].total_bytes += size;
 }
 
 int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint64 track_number)
@@ -145,9 +185,38 @@ int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint64 track_number)
     return -1;
 }
 
-bool SDLMovie_CanPlayback(SDL_Movie *movie)
+bool SDLMovie_CanPlaybackVideo(SDL_Movie *movie)
 {
-    return movie && movie->ntracks > 0 && movie->count_cached_frames[0] > 0;
+    return movie && movie->ntracks > 0 && movie->total_frames > 0 && movie->current_video_track != SDL_MOVIE_NO_TRACK;
+}
+
+bool SDLMovie_CanPlaybackAudio(SDL_Movie *movie)
+{
+    return movie && movie->ntracks > 0 && movie->total_audio_frames > 0 && movie->current_audio_track != SDL_MOVIE_NO_TRACK;
+}
+
+static SDL_MovieCodecType SDLMovie_GetTrackCodec(MovieTrack *track)
+{
+    if (SDL_strncmp(track->codec_id, "V_VP8", 32) == 0)
+    {
+        return SDL_MOVIE_CODEC_TYPE_VP8;
+    }
+    else if (SDL_strncmp(track->codec_id, "V_VP9", 32) == 0)
+    {
+        return SDL_MOVIE_CODEC_TYPE_VP9;
+    }
+    else if (SDL_strncmp(track->codec_id, "A_VORBIS", 32) == 0)
+    {
+        return SDL_MOVIE_CODEC_TYPE_VORBIS;
+    }
+    else if (SDL_strncmp(track->codec_id, "A_OPUS", 32) == 0)
+    {
+        return SDL_MOVIE_CODEC_TYPE_OPUS;
+    }
+    else
+    {
+        return SDL_MOVIE_CODEC_TYPE_UNKNOWN;
+    }
 }
 
 void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
@@ -158,16 +227,35 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
     if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
     {
         movie->current_video_track = track;
+
+        MovieTrack *new_video_track = SDLMovie_GetVideoTrack(movie);
+
+        movie->video_codec = SDLMovie_GetTrackCodec(new_video_track);
+        movie->total_frames = new_video_track->total_frames;
+
+        if (movie->current_frame_surface)
+        {
+            SDL_DestroySurface(movie->current_frame_surface);
+        }
+
+        movie->current_frame_surface = SDL_CreateSurface(
+            new_video_track->video_width,
+            new_video_track->video_height,
+            SDL_PIXELFORMAT_RGB24);
     }
     else if (type == SDL_MOVIE_TRACK_TYPE_AUDIO)
     {
         movie->current_audio_track = track;
+
+        MovieTrack *new_audio_track = SDLMovie_GetAudioTrack(movie);
+        movie->audio_codec = SDLMovie_GetTrackCodec(new_audio_track);
+        movie->total_audio_frames = new_audio_track->total_frames;
+        movie->audio_spec.channels = new_audio_track->audio_channels;
+        movie->audio_spec.freq = new_audio_track->audio_sample_frequency;
+        movie->audio_spec.format = SDL_AUDIO_F32;
+
+        SDLMovie_PreloadAudioStream(movie);
     }
-
-    movie->video_codec = SDL_MOVIE_CODEC_TYPE_VP8;
-    movie->audio_codec = SDL_MOVIE_CODEC_TYPE_VORBIS;
-
-    movie->total_frames = movie->tracks[movie->current_video_track].total_frames;
 }
 
 MovieTrack *SDLMovie_GetVideoTrack(SDL_Movie *movie)
@@ -185,17 +273,17 @@ MovieTrack *SDLMovie_GetAudioTrack(SDL_Movie *movie)
     return &movie->tracks[movie->current_audio_track];
 }
 
-bool SDLMovie_HasNextFrame(SDL_Movie *movie)
+bool SDLMovie_HasNextVideoFrame(SDL_Movie *movie)
 {
-    return movie && SDLMovie_CanPlayback(movie);
+    return movie && SDLMovie_CanPlaybackVideo(movie) && movie->current_frame < movie->total_frames;
 }
 
-bool SDLMovie_DecodeFrame(SDL_Movie *movie)
+bool SDLMovie_DecodeVideoFrame(SDL_Movie *movie)
 {
     if (!movie)
         return false;
 
-    if (!SDLMovie_CanPlayback(movie))
+    if (!SDLMovie_CanPlaybackVideo(movie))
     {
         SDLMovie_SetError("No tracks or playback data available");
         return false;
@@ -203,21 +291,16 @@ bool SDLMovie_DecodeFrame(SDL_Movie *movie)
 
     MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
 
-    if (!movie->current_frame_surface)
+    SDLMovie_ReadCurrentFrame(movie, SDL_MOVIE_TRACK_TYPE_VIDEO);
+
+    if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP8)
     {
-        movie->current_frame_surface = SDL_CreateSurface(
-            video_track->video_width,
-            video_track->video_height,
-            SDL_PIXELFORMAT_RGB24);
+        return SDLMovie_Decode_VP8(movie);
     }
 
-    SDLMovie_ReadCurrentFrame(movie);
+    SDLMovie_SetError("Unsupported video codec, frame not decoded");
 
-    SDLMovie_Decode_VP8(movie);
-
-    movie->current_frame++;
-
-    return true;
+    return false;
 }
 
 bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture)
@@ -242,18 +325,233 @@ bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture)
     return true;
 }
 
-void SDLMovie_ReadCurrentFrame(SDL_Movie *movie)
+void SDLMovie_ReadCurrentFrame(SDL_Movie *movie, SDL_MovieTrackType type)
 {
     if (!movie)
         return;
 
-    CachedMovieFrame *frame = &movie->cached_frames[movie->current_video_track][movie->current_frame];
+    int target_track_index = type == SDL_MOVIE_TRACK_TYPE_VIDEO ? movie->current_video_track : movie->current_audio_track;
 
-    movie->encoded_video_frame = SDL_realloc(movie->encoded_video_frame, frame->size);
+    if (target_track_index == SDL_MOVIE_NO_TRACK)
+    {
+        return;
+    }
 
-    SDL_SeekIO(movie->io, frame->offset, SDL_IO_SEEK_SET);
+    if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+    {
+        CachedMovieFrame *frame = &movie->cached_frames[target_track_index][movie->current_frame];
 
-    SDL_ReadIO(movie->io, movie->encoded_video_frame, frame->size);
+        if (!movie->encoded_video_frame || movie->encoded_video_frame_size < frame->size)
+        {
+            movie->encoded_video_frame = SDL_realloc(movie->encoded_video_frame, frame->size);
+        }
 
-    movie->encoded_video_frame_size = frame->size;
+        SDL_SeekIO(movie->io, frame->offset, SDL_IO_SEEK_SET);
+
+        SDL_ReadIO(movie->io, movie->encoded_video_frame, frame->size);
+
+        movie->encoded_video_frame_size = frame->size;
+    }
+    else
+    {
+        CachedMovieFrame *frame = &movie->cached_frames[target_track_index][movie->current_audio_frame];
+
+        if (!movie->encoded_audio_frame || movie->encoded_audio_frame_size < frame->size)
+        {
+            movie->encoded_audio_frame = SDL_realloc(movie->encoded_audio_frame, frame->size);
+        }
+
+        SDL_SeekIO(movie->io, frame->offset, SDL_IO_SEEK_SET);
+
+        SDL_ReadIO(movie->io, movie->encoded_audio_frame, frame->size);
+
+        movie->encoded_audio_frame_size = frame->size;
+    }
+}
+
+Uint64 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie)
+{
+    if (!movie)
+        return 0;
+    return movie->last_frame_decode_ms;
+}
+
+Uint64 SDLMovie_GetTotalFrames(SDL_Movie *movie)
+{
+    return movie->total_frames;
+}
+
+Uint64 SDLMovie_GetCurrentFrame(SDL_Movie *movie)
+{
+    return movie->current_frame;
+}
+
+void SDLMovie_NextVideoFrame(SDL_Movie *movie)
+{
+    if (!movie)
+        return;
+
+    if (!SDLMovie_CanPlaybackVideo(movie))
+    {
+        SDLMovie_SetError("No tracks or playback data available");
+        return;
+    }
+
+    if (movie->current_frame < movie->total_frames)
+    {
+        movie->current_frame++;
+    }
+}
+
+void SDLMovie_GetVideoSize(SDL_Movie *movie, int *w, int *h)
+{
+    if (!movie || !w || !h)
+        return;
+
+    MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
+
+    *w = video_track->video_width;
+    *h = video_track->video_height;
+}
+
+const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie)
+{
+    if (!movie || !movie->current_frame_surface)
+    {
+        return NULL;
+    }
+
+    return movie->current_frame_surface;
+}
+
+void SDLMovie_SeekFrame(SDL_Movie *movie, Uint64 frame)
+{
+    if (!movie)
+        return;
+
+    if (frame >= movie->total_frames)
+        return;
+
+    movie->current_frame = frame;
+}
+
+bool SDLMovie_HasNextAudioFrame(SDL_Movie *movie)
+{
+    if (!movie || movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+    {
+        return false;
+    }
+
+    return movie->current_audio_frame < movie->total_audio_frames;
+}
+
+bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie)
+{
+    if (!movie || movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+    {
+        return false;
+    }
+
+    SDLMovie_ReadCurrentFrame(movie, SDL_MOVIE_TRACK_TYPE_AUDIO);
+
+    if (movie->audio_codec == SDL_MOVIE_CODEC_TYPE_VORBIS)
+    {
+        VorbisDecodeResult res = SDLMovie_Decode_Vorbis(movie);
+
+        return res == SDL_MOVIE_VORBIS_DECODE_DONE;
+    }
+
+    SDLMovie_SetError("Unsupported audio codec, frame not decoded");
+
+    return false;
+}
+
+const SDL_MovieAudioSample *SDLMovie_GetAudioBuffer(SDL_Movie *movie, size_t *size)
+{
+    if (!movie || !movie->decoded_audio_frame)
+    {
+        return NULL;
+    }
+
+    *size = movie->decoded_audio_frame_size;
+
+    return movie->decoded_audio_frame;
+}
+
+void SDLMovie_NextAudioFrame(SDL_Movie *movie)
+{
+    if (!movie)
+        return;
+
+    if (!SDLMovie_CanPlaybackAudio(movie))
+    {
+        SDLMovie_SetError("No tracks or playback data available");
+        return;
+    }
+
+    if (movie->current_audio_frame < movie->total_audio_frames)
+    {
+        movie->current_audio_frame++;
+    }
+}
+
+const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie)
+{
+    if (!movie)
+        return NULL;
+    if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+        return NULL;
+    return &movie->audio_spec;
+}
+
+void SDLMovie_PreloadAudioStream(SDL_Movie *movie)
+{
+    if (!movie)
+        return;
+
+    if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+        return;
+
+    MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+
+    Uint64 buffer_size = audio_track->total_bytes;
+
+    if (!movie->encoded_audio_buffer || movie->encoded_audio_buffer_size < buffer_size)
+    {
+        movie->encoded_audio_buffer = SDL_realloc(movie->encoded_audio_buffer, buffer_size);
+        movie->encoded_audio_buffer_size = buffer_size;
+    }
+
+    Uint64 offset = 0;
+
+    for (Uint64 frame = 0; frame < audio_track->total_frames; frame++)
+    {
+        CachedMovieFrame *frame_data = &movie->cached_frames[movie->current_audio_track][frame];
+
+        SDL_SeekIO(movie->io, frame_data->offset, SDL_IO_SEEK_SET);
+
+        SDL_ReadIO(movie->io, movie->encoded_audio_buffer + offset, frame_data->size);
+
+        offset += frame_data->size;
+
+        SDL_assert(offset <= buffer_size);
+    }
+
+    movie->encoded_audio_buffer_cursor = 0;
+}
+
+void *SDLMovie_ReadEncodedAudioData(SDL_Movie *movie, void *dest, int size)
+{
+    if (!movie || !movie->encoded_audio_buffer || movie->encoded_audio_buffer_cursor + size > movie->encoded_audio_buffer_size)
+    {
+        return NULL;
+    }
+
+    Uint8 *data = movie->encoded_audio_buffer + movie->encoded_audio_buffer_cursor;
+
+    SDL_memcpy(dest, data, size);
+
+    movie->encoded_audio_buffer_cursor += size;
+
+    return data;
 }

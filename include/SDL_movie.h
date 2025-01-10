@@ -17,6 +17,8 @@ extern "C"
 
 #define MAX_SDL_MOVIE_TRACKS 8
 
+#define SDL_MOVIE_NO_TRACK -1
+
     typedef enum
     {
         SDL_MOVIE_TRACK_TYPE_UNKNOWN = 0,
@@ -35,19 +37,37 @@ extern "C"
 
     typedef struct SDL_Movie SDL_Movie;
 
+    typedef float SDL_MovieAudioSample;
+
     extern SDL_Movie *SDLMovie_Open(const char *file);
     extern SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io);
 
-    extern SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *renderer);
-    extern bool SDLMovie_HasNextFrame(SDL_Movie *movie);
-    extern bool SDLMovie_DecodeFrame(SDL_Movie *movie);
-    extern bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture);
-    extern SDL_Surface *SDLMovie_GetFrameSurface(SDL_Movie *movie);
-    extern void SDLMovie_SeekSeconds(SDL_Movie *movie, float time);
-    extern void SDLMovie_SeekFrame(SDL_Movie *movie, int frame);
+    extern void SDLMovie_Free(SDL_Movie *movie, bool closeio);
+
     extern void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track);
 
-    extern void SDLMovie_Free(SDL_Movie *movie);
+    extern SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *renderer);
+    extern bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture);
+
+    extern bool SDLMovie_HasNextVideoFrame(SDL_Movie *movie);
+    extern bool SDLMovie_DecodeVideoFrame(SDL_Movie *movie);
+    extern const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie);
+    extern void SDLMovie_NextVideoFrame(SDL_Movie *movie);
+
+    extern bool SDLMovie_HasNextAudioFrame(SDL_Movie *movie);
+    extern bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie);
+    extern const SDL_MovieAudioSample *SDLMovie_GetAudioBuffer(SDL_Movie *movie, size_t *size);
+    extern void SDLMovie_NextAudioFrame(SDL_Movie *movie);
+    extern const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie);
+
+    extern void SDLMovie_SeekSeconds(SDL_Movie *movie, float time);
+    extern void SDLMovie_SeekFrame(SDL_Movie *movie, Uint64 frame);
+
+    extern Uint64 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie);
+    extern Uint64 SDLMovie_GetTotalFrames(SDL_Movie *movie);
+    extern Uint64 SDLMovie_GetCurrentFrame(SDL_Movie *movie);
+
+    extern void SDLMovie_GetVideoSize(SDL_Movie *movie, int *w, int *h);
 
     extern const char *SDLMovie_GetError();
 
