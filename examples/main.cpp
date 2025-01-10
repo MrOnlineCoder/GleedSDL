@@ -128,6 +128,7 @@ int main()
                 // printf("\n");
 
                 SDL_PutAudioStreamData(audio_stream, audio_buffer, sz);
+                printf("Put %d samples\n", samples);
             }
 
             SDLMovie_NextAudioFrame(movie);
@@ -143,7 +144,7 @@ int main()
         SDL_RenderClear(renderer);
         SDL_RenderTexture(renderer, movieFrameTexture, NULL, &dst);
         SDL_RenderPresent(renderer);
-        SDL_Delay(30); // 30 FPS
+        SDL_Delay(16); // 30 FPS
     }
 
     SDLMovie_Free(movie, true);
