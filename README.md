@@ -44,6 +44,14 @@ The general workflow is the following:
 
 I wanted to use a simple, open-source, free and relatively modern container format - although things like AVI, MP4 and MKV are more popular, they are either too old, too proprietary, or too complex for my needs. WebM is a nice subset of Matroska, containing everything needed for replaying short cinematics, as descrbied earlier.
 
+## How can I convert my video to WebM for SDL_Movie?
+
+Use `ffmpeg`:
+
+```bash
+ffmpeg -i input.mp4 -c:v libvpx -c:a libvorbis output.webm
+```
+
 ## Stability note
 
 Please note, that this library was mostly written for educational purposes, and this was my first time working with low-level codecs such as VP8 and Vorbis, therefore, it may contain bugs or memory leaks. Use it at your own risk, and feel free to report any issues.

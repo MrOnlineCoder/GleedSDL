@@ -4,8 +4,13 @@
 #include <vpx/vpx_decoder.h>
 #include <vpx/vp8dx.h>
 
-static vpx_codec_iface_t *vp8 = NULL;
-static vpx_codec_ctx_t codec;
+typedef struct
+{
+    vpx_codec_iface_t *vp8;
+    vpx_codec_iface_t *vp9;
+    vpx_codec_ctx_t codec8;
+    vpx_codec_ctx_t codec9;
+} VPXContext;
 
 /* Stolen from libvpx/tools_common.c */
 static int vpx_img_plane_width(const vpx_image_t *img, int plane)
@@ -58,46 +63,76 @@ static SDL_Colorspace vpx_cs_to_sdl_cs(vpx_color_space_t cs)
     }
 }
 
-bool SDLMovie_Decode_VP8(SDL_Movie *movie)
+bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 {
     Uint64 decode_start = SDL_GetTicksNS();
-    if (!vp8)
+
+    if (!movie->vpx_context)
     {
-        vp8 = vpx_codec_vp8_dx();
-
-        if (!vp8)
-        {
-            SDLMovie_SetError("Failed to initialize VP8 decoder");
-            return false;
-        }
-
-        vpx_codec_err_t init_err = vpx_codec_dec_init(&codec, vp8, NULL, 0);
-
-        if (init_err != VPX_CODEC_OK)
-        {
-            SDLMovie_SetError("Failed to initialize VP8 decoder: %s", vpx_codec_err_to_string(init_err));
-            return false;
-        }
+        movie->vpx_context = SDL_calloc(1, sizeof(VPXContext));
     }
 
-    vpx_codec_err_t decode_err = vpx_codec_decode(&codec, movie->encoded_video_frame, movie->encoded_video_frame_size, NULL, 0);
+    vpx_codec_iface_t *vpi = NULL;
+    vpx_codec_ctx_t *codec = NULL;
+
+    VPXContext *ctx = (VPXContext *)movie->vpx_context;
+
+    if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP8)
+    {
+        if (!ctx->vp8)
+        {
+            ctx->vp8 = vpx_codec_vp8_dx();
+
+            int vp8_err = vpx_codec_dec_init(&ctx->codec8, ctx->vp8, NULL, 0);
+
+            if (vp8_err != VPX_CODEC_OK)
+            {
+                return SDLMovie_SetError("Failed to initialize VP8 decoder: %s", vpx_codec_err_to_string(vp8_err));
+            }
+        }
+
+        vpi = ctx->vp8;
+        codec = &ctx->codec8;
+    }
+    else if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP9)
+    {
+        if (!ctx->vp9)
+        {
+            ctx->vp9 = vpx_codec_vp9_dx();
+
+            int vp9_err = vpx_codec_dec_init(&ctx->codec9, ctx->vp9, NULL, 0);
+
+            if (vp9_err != VPX_CODEC_OK)
+            {
+                return SDLMovie_SetError("Failed to initialize VP9 decoder: %s", vpx_codec_err_to_string(vp9_err));
+            }
+        }
+
+        vpi = ctx->vp9;
+        codec = &ctx->codec9;
+    }
+
+    if (!vpi)
+    {
+        return SDLMovie_SetError("Failed to initialize VPX decoder");
+    }
+
+    vpx_codec_err_t decode_err = vpx_codec_decode(codec, movie->encoded_video_frame, movie->encoded_video_frame_size, NULL, 0);
 
     if (decode_err != VPX_CODEC_OK)
     {
-        SDLMovie_SetError("Failed to decode VP8 frame: %s", vpx_codec_err_to_string(decode_err));
-        return false;
+        return SDLMovie_SetError("Failed to decode VP8 frame: %s", vpx_codec_err_to_string(decode_err));
     }
 
     vpx_codec_iter_t iter = NULL;
 
     vpx_image_t *img = NULL;
 
-    img = vpx_codec_get_frame(&codec, &iter);
+    img = vpx_codec_get_frame(codec, &iter);
 
     if (!img)
     {
-        SDLMovie_SetError("Failed to get decoded VP8 frame - received no image");
-        return false;
+        return SDLMovie_SetError("Failed to get decoded VP8 frame - received no image");
     }
 
     if (!movie->current_frame_surface)
@@ -193,4 +228,28 @@ bool SDLMovie_Decode_VP8(SDL_Movie *movie)
     movie->last_frame_decode_ms /= 1000000;
 
     return true;
+}
+
+void SDLMovie_Close_VPX(SDL_Movie *movie)
+{
+    if (movie->vpx_context)
+    {
+        VPXContext *ctx = (VPXContext *)movie->vpx_context;
+
+        if (ctx->vp8)
+        {
+            vpx_codec_destroy(&ctx->codec8);
+            ctx->vp8 = NULL;
+        }
+
+        if (ctx->vp9)
+        {
+            vpx_codec_destroy(&ctx->codec9);
+            ctx->vp9 = NULL;
+        }
+
+        SDL_free(ctx);
+
+        movie->vpx_context = NULL;
+    }
 }

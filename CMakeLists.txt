@@ -62,9 +62,10 @@ include(libvpx.cmake)
 
 set(LIB_SOURCES 
     src/SDL_movie_webm.cpp
-    src/SDL_movie_vp8.c
+    src/SDL_movie_vpx.c
     src/SDL_movie.c
     src/SDL_movie_vorbis.c
+    src/SDL_movie_player.c
 )
 
 add_library(
@@ -78,7 +79,7 @@ target_include_directories(SDL_movie PRIVATE ${libwebm_SOURCE_DIR}/webm_parser/i
 
 target_include_directories(SDL_movie PUBLIC include/)
 
-option(SDL_MOVIE_BUILD_EXAMPLES "Build examples" ON)
+option(SDL_MOVIE_BUILD_EXAMPLES "Build SDL_Movie examples" ON)
 
 if (SDL_MOVIE_BUILD_EXAMPLES)
     add_subdirectory(examples/)

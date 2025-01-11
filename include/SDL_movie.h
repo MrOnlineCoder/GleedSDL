@@ -51,7 +51,7 @@ extern "C"
      * Represents single opened and parsed .webm file.
      *
      * Movie can be created via SDLMovie_Open or SDLMovie_OpenIO functions.
-     * It must be freed with SDLMovie_Free function after no longer needed.
+     * It must be freed with SDLMovie_FreeMovie function after no longer needed.
      *
      * Opaque structure, do not modify its members directly.
      */
@@ -141,7 +141,7 @@ extern "C"
      * \param movie SDL_Movie instance to free
      * \param closeio If true, will close the SDL IO stream associated with the movie
      */
-    extern void SDLMovie_Free(SDL_Movie *movie, bool closeio);
+    extern void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio);
 
     /**
      * Get a track from movie
@@ -322,6 +322,8 @@ extern "C"
      * The size of the buffer in bytes is returned in the size parameter,
      * and the number of per-channel samples is returned in the count parameter.
      *
+     * On error, both size and count will be set to 0.
+     *
      * \param movie SDL_Movie instance with configured audio track and decoded audio frame
      * \param size Pointer to store the size of the buffer in bytes, or NULL if not needed
      * \param count Pointer to store the number of samples in the buffer, or NULL if not needed
@@ -439,6 +441,36 @@ extern "C"
      * \returns Error message string, or NULL if there was no error.
      */
     extern const char *SDLMovie_GetError();
+
+    /**
+     * Preload audio stream
+     *
+     * This function will load WHOLE audio stream into memory, so it can be played back without any delay.
+     * You may estimate the memory footprint of doing so by looking at track->total_bytes and track->total_frames.
+     * It does not perform decoding, only loads the encoded audio data into memory.
+     * It will still need to seek and read frame separately because of the nature of the Matroska/WebM blocks.
+     *
+     * \param movie SDL_Movie instance with configured audio track
+     * \returns True on success, false on error. Call SDLMovie_GetError to get the error message.
+     *
+     */
+    extern bool SDLMovie_PreloadAudioStream(SDL_Movie *movie);
+
+    typedef struct SDL_MoviePlayer SDL_MoviePlayer;
+
+#define SDL_MOVIE_PLAYER_TIME_DELTA_AUTO -1
+
+    extern SDL_MoviePlayer *SDLMovie_CreatePlayer(SDL_Movie *mov);
+    extern SDL_MoviePlayer *SDLMovie_CreatePlayerFromPath(const char *path);
+    extern SDL_MoviePlayer *SDLMovie_CreatePlayerFromIO(SDL_IOStream *io);
+
+    extern void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov);
+
+    extern bool SDLMovie_SetAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev);
+
+    extern void SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms);
+
+    extern void SDLMovie_FreePlayer(SDL_MoviePlayer *player);
 
 #ifdef __cplusplus
 }

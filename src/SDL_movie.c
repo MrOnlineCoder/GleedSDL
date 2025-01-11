@@ -75,7 +75,7 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
     return movie;
 }
 
-void SDLMovie_Free(SDL_Movie *movie, bool closeio)
+void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio)
 {
     if (!movie)
         return;
@@ -111,6 +111,7 @@ void SDLMovie_Free(SDL_Movie *movie, bool closeio)
     }
 
     SDLMovie_Close_Vorbis(movie);
+    SDLMovie_Close_VPX(movie);
 
     if (closeio)
         SDL_CloseIO(movie->io);
@@ -166,11 +167,6 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
     frame->size = size;
 
     movie->count_cached_frames[track]++;
-
-    if (timecode > movie->total_time)
-    {
-        movie->total_time = timecode;
-    }
 
     movie->tracks[track].total_frames++;
     movie->tracks[track].total_bytes += size;
@@ -302,9 +298,9 @@ bool SDLMovie_DecodeVideoFrame(SDL_Movie *movie)
 
     SDLMovie_ReadCurrentFrame(movie, SDL_MOVIE_TRACK_TYPE_VIDEO);
 
-    if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP8)
+    if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP8 || movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP9)
     {
-        return SDLMovie_Decode_VP8(movie);
+        return SDLMovie_Decode_VPX(movie);
     }
 
     SDLMovie_SetError("Unsupported video codec, frame not decoded");
@@ -495,6 +491,10 @@ const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *s
 {
     if (!movie || !movie->decoded_audio_frame)
     {
+        if (size)
+            *size = 0;
+        if (count)
+            *count = 0;
         return NULL;
     }
 
@@ -533,13 +533,13 @@ const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie)
     return &movie->audio_spec;
 }
 
-void SDLMovie_PreloadAudioStream(SDL_Movie *movie)
+bool SDLMovie_PreloadAudioStream(SDL_Movie *movie)
 {
     if (!movie)
-        return;
+        return false;
 
     if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
-        return;
+        return false;
 
     SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
 
@@ -567,6 +567,8 @@ void SDLMovie_PreloadAudioStream(SDL_Movie *movie)
     }
 
     movie->encoded_audio_buffer_cursor = 0;
+
+    return true;
 }
 
 void *SDLMovie_ReadEncodedAudioData(SDL_Movie *movie, void *dest, int size)
@@ -599,4 +601,17 @@ int SDLMovie_GetTrackCount(const SDL_Movie *movie)
     if (!movie)
         return 0;
     return movie->ntracks;
+}
+
+Uint64 SDLMovie_TimecodeToMilliseconds(SDL_Movie *movie, Uint64 timecode)
+{
+    if (!movie)
+        return 0;
+    return timecode * movie->timecode_scale / 1000000;
+}
+Uint64 SDLMovie_MillisecondsToTimecode(SDL_Movie *movie, Uint64 ms)
+{
+    if (!movie)
+        return 0;
+    return ms * 1000000 / movie->timecode_scale;
 }

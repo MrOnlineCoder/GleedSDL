@@ -151,23 +151,16 @@ int main()
             SDLMovie_NextAudioFrame(movie);
         }
 
-        int iw, ih;
-        SDLMovie_GetVideoSize(movie, &iw, &ih);
-
-        SDL_FRect dst = {};
-        dst.w = iw;
-        dst.h = ih;
-
         SDL_RenderClear(renderer);
 
         /* Render the movie video frame, contained in our playback texture */
-        SDL_RenderTexture(renderer, movieFrameTexture, NULL, &dst);
+        SDL_RenderTexture(renderer, movieFrameTexture, NULL, NULL);
         SDL_RenderPresent(renderer);
         SDL_Delay(16); // 60 FPS
     }
 
     /* Don't forget to free movie resources after finishing playback */
-    SDLMovie_Free(movie, true);
+    SDLMovie_FreeMovie(movie, true);
     SDL_DestroyTexture(movieFrameTexture);
     SDL_DestroyRenderer(renderer);
     SDL_FlushAudioStream(audio_stream);
