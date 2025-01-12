@@ -60,7 +60,12 @@ int main()
     }
 
     SDL_MoviePlayer *player = SDLMovie_CreatePlayer(movie);
-    SDLMovie_SetAudioOutput(player, audio_device);
+    SDLMovie_SetPlayerAudioOutput(player, audio_device);
+    SDLMovie_PreloadAudioStream(movie);
+
+    SDL_Texture *video_frame = SDLMovie_CreatePlaybackTexture(
+        movie, renderer);
+    SDLMovie_SetPlayerVideoOutputTexture(player, video_frame);
 
     bool running = true;
 
@@ -77,13 +82,32 @@ int main()
 
             if (ev.type == SDL_EVENT_KEY_DOWN)
             {
+                if (ev.key.key == SDLK_SPACE)
+                {
+                    if (SDLMovie_IsPlayerPaused(player))
+                        SDLMovie_ResumePlayer(player);
+                    else
+                        SDLMovie_PausePlayer(player);
+                }
             }
         }
 
-        SDLMovie_UpdatePlayer(player, SDL_MOVIE_PLAYER_TIME_DELTA_AUTO);
+        SDL_MoviePlayerUpdateResult upd = SDLMovie_UpdatePlayer(player, SDL_MOVIE_PLAYER_TIME_DELTA_AUTO);
+
+        if (upd == SDL_MOVIE_PLAYER_UPDATE_ERROR)
+        {
+            std::cerr << "Error updating player: " << SDLMovie_GetError() << std::endl;
+            break;
+        }
+
+        if (SDLMovie_HasPlayerFinished(player))
+        {
+            printf("Move finished, duration = %.2f seconds\n", SDLMovie_GetPlayerCurrentTimeSeconds(player));
+            running = false;
+        }
 
         SDL_RenderClear(renderer);
-        // render
+        SDL_RenderTexture(renderer, video_frame, NULL, NULL);
         SDL_RenderPresent(renderer);
         SDL_Delay(16); // 60 FPS
     }
@@ -91,6 +115,7 @@ int main()
     /* Don't forget to free movie resources after finishing playback */
     SDLMovie_FreePlayer(player);
     SDLMovie_FreeMovie(movie, true);
+    SDL_DestroyTexture(video_frame);
     SDL_CloseAudioDevice(audio_device);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

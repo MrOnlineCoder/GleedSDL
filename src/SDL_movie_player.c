@@ -1,6 +1,6 @@
 #include "SDL_movie_internal.h"
 
-#define SDL_MOVIE_PLAYER_DEFAULT_PREFETCH_TIME_MS 1000
+#define SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS 200
 
 static bool check_player(SDL_MoviePlayer *player)
 {
@@ -58,6 +58,11 @@ void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov)
 
     player->mov = mov;
     player->current_time = 0;
+    player->next_video_frame_at = 0;
+    player->next_audio_frame_at = 0;
+    player->finished = false;
+
+    SDLMovie_SeekFrame(player->mov, 0);
 }
 
 void SDLMovie_FreePlayer(SDL_MoviePlayer *player)
@@ -73,16 +78,29 @@ void SDLMovie_FreePlayer(SDL_MoviePlayer *player)
         SDL_DestroyAudioStream(player->output_audio_stream);
     }
 
+    if (player->current_video_frame_surface)
+    {
+        SDL_DestroySurface(player->current_video_frame_surface);
+    }
+
     SDL_free(player);
 }
 
-void SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms)
+SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms)
 {
     if (!check_player(player))
-        return;
+        return SDL_MOVIE_PLAYER_UPDATE_NONE;
 
     if (time_delta_ms == 0)
-        return;
+        return SDL_MOVIE_PLAYER_UPDATE_NONE;
+
+    if (player->paused)
+        return SDL_MOVIE_PLAYER_UPDATE_NONE;
+
+    if (player->finished)
+        return SDL_MOVIE_PLAYER_UPDATE_NONE;
+
+    SDL_MoviePlayerUpdateResult result = SDL_MOVIE_PLAYER_UPDATE_NONE;
 
     const Uint64 time_passed = time_delta_ms < 0 ? SDL_GetTicks() - player->last_frame_at_ticks : time_delta_ms;
 
@@ -90,42 +108,106 @@ void SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms)
 
     player->last_frame_at_ticks = SDL_GetTicks();
 
-    if (SDLMovie_CanPlaybackAudio(player->mov))
+    if (SDLMovie_CanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
     {
-        const Uint32 audio_samples_to_prefetch = ((time_passed * player->mov->audio_spec.freq) / 1000) * player->mov->audio_spec.channels;
+        const Uint64 preload_time = player->current_time + SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS;
 
-        while (player->audio_buffer_count < audio_samples_to_prefetch && SDLMovie_HasNextAudioFrame(player->mov))
+        CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
+            player->mov, SDL_MOVIE_TRACK_TYPE_AUDIO);
+
+        while (SDLMovie_HasNextAudioFrame(player->mov) && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) < preload_time)
         {
             if (!SDLMovie_DecodeAudioFrame(player->mov))
             {
-                return;
+                return SDL_MOVIE_PLAYER_UPDATE_ERROR;
             }
 
             int samples_count;
 
             const SDL_MovieAudioSample *samples = SDLMovie_GetAudioSamples(player->mov, NULL, &samples_count);
 
+            if (player->audio_buffer_count + samples_count > player->audio_buffer_capacity)
+            {
+                /* Rollback to start of buffer and start overwriting, user should've read them */
+                player->audio_buffer_count = 0;
+            }
+
             if (samples_count > 0)
             {
                 SDLMovie_AddAudioSamplesToPlayer(player, samples, samples_count);
+
+                if (player->output_audio_stream)
+                {
+                    SDL_PutAudioStreamData(player->output_audio_stream, samples, samples_count * sizeof(SDL_MovieAudioSample));
+                    player->audio_buffer_count = 0;
+                }
             }
 
             SDLMovie_NextAudioFrame(player->mov);
+            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
+                player->mov, SDL_MOVIE_TRACK_TYPE_AUDIO);
         }
 
-        if (player->output_audio_stream && player->audio_buffer_count > 0)
+        if (next_frame_to_play)
         {
-            printf("Put audio stream data %d\n", player->audio_buffer_count);
-            SDL_PutAudioStreamData(player->output_audio_stream, player->audio_buffer, player->audio_buffer_count * sizeof(SDL_MovieAudioSample));
-            player->audio_buffer_count = 0;
+            player->next_audio_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
         }
-    }
-}
 
-void SDLMovie_SyncPlayer(SDL_MoviePlayer *player)
-{
-    if (!check_player(player))
-        return;
+        result |= SDL_MOVIE_PLAYER_UPDATE_AUDIO;
+    }
+
+    if (SDLMovie_CanPlaybackVideo(player->mov) && player->current_time >= player->next_video_frame_at)
+    {
+        CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
+            player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
+
+        while (SDLMovie_HasNextVideoFrame(player->mov) && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) <= player->current_time)
+        {
+            if (!SDLMovie_DecodeVideoFrame(player->mov))
+            {
+                return SDL_MOVIE_PLAYER_UPDATE_ERROR;
+            }
+
+            if (!player->current_video_frame_surface)
+            {
+                player->current_video_frame_surface = SDL_DuplicateSurface(
+                    (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov));
+            }
+            else
+            {
+                SDL_BlitSurface(
+                    (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov),
+                    NULL,
+                    player->current_video_frame_surface,
+                    NULL);
+            }
+
+            if (player->output_video_frame_texture)
+            {
+                SDLMovie_UpdatePlaybackTexture(
+                    player->mov,
+                    player->output_video_frame_texture);
+            }
+
+            SDLMovie_NextVideoFrame(player->mov);
+            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
+                player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
+        }
+
+        if (next_frame_to_play)
+        {
+            player->next_video_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
+        }
+
+        if (!SDLMovie_HasNextVideoFrame(player->mov))
+        {
+            player->finished = true;
+        }
+
+        result |= SDL_MOVIE_PLAYER_UPDATE_VIDEO;
+    }
+
+    return result;
 }
 
 void SDLMovie_AddAudioSamplesToPlayer(
@@ -139,12 +221,10 @@ void SDLMovie_AddAudioSamplesToPlayer(
     if (!samples || count <= 0)
         return;
 
-    if (!player->audio_buffer || player->audio_buffer_count + count > player->audio_buffer_capacity)
+    if (!player->audio_buffer)
     {
-        player->audio_buffer_capacity = player->mov->audio_spec.freq * 2;
+        player->audio_buffer_capacity = player->mov->audio_spec.freq * player->mov->audio_spec.channels + player->audio_output_samples_buffer_size;
         player->audio_buffer = (SDL_MovieAudioSample *)SDL_calloc(player->audio_buffer_capacity, sizeof(SDL_MovieAudioSample));
-        // player->audio_buffer_capacity = player->audio_buffer_capacity ? player->audio_buffer_capacity * 2 : count;
-        // player->audio_buffer = SDL_realloc(player->audio_buffer, player->audio_buffer_capacity * sizeof(SDL_MovieAudioSample));
 
         if (!player->audio_buffer)
         {
@@ -156,15 +236,12 @@ void SDLMovie_AddAudioSamplesToPlayer(
     for (int s = 0; s < count; s++)
     {
         player->audio_buffer[player->audio_buffer_count + s] = samples[s];
-        // printf("%d > %d\n", player->audio_buffer_count + s, player->audio_buffer_capacity);
     }
-
-    // SDL_memcpy(player->audio_buffer + player->audio_buffer_count, samples, count * sizeof(SDL_MovieAudioSample));
 
     player->audio_buffer_count += count;
 }
 
-bool SDLMovie_SetAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev)
+bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev)
 {
     if (!check_player(player))
         return SDL_SetError("Invalid player");
@@ -178,6 +255,13 @@ bool SDLMovie_SetAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev)
     {
         SDL_DestroyAudioStream(player->output_audio_stream);
         player->output_audio_stream = NULL;
+        player->bound_audio_device = 0;
+    }
+
+    /* If zero was provided for device id - user wants to stop audio output */
+    if (!dev)
+    {
+        return true;
     }
 
     SDL_AudioSpec dst_audio_spec;
@@ -191,7 +275,7 @@ bool SDLMovie_SetAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev)
         player->audio_output_samples_buffer_size = 1024;
     }
 
-    player->audio_output_sample_buffer_ms = ((Sint64)player->audio_output_samples_buffer_size * 1000) / dst_audio_spec.freq;
+    player->audio_output_samples_buffer_ms = ((Sint64)player->audio_output_samples_buffer_size * 1000) / dst_audio_spec.freq;
 
     player->output_audio_stream = SDL_CreateAudioStream(
         &player->mov->audio_spec, &dst_audio_spec);
@@ -203,8 +287,137 @@ bool SDLMovie_SetAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev)
 
     if (!SDL_BindAudioStream(dev, player->output_audio_stream))
     {
+        SDL_DestroyAudioStream(player->output_audio_stream);
         return SDLMovie_SetError("Failed to bind audio stream: %s", SDL_GetError());
     }
 
+    player->bound_audio_device = dev;
+
     return true;
 }
+
+const SDL_MovieAudioSample *SDLMovie_GetPlayerAvailableAudioSamples(
+    SDL_MoviePlayer *player,
+    int *count)
+{
+    if (!check_player(player))
+        return NULL;
+
+    if (!player->audio_buffer)
+        return NULL;
+
+    if (count)
+        *count = player->audio_buffer_count;
+
+    return player->audio_buffer;
+}
+
+void SDLMovie_PausePlayer(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return;
+
+    player->paused = true;
+
+    if (player->output_audio_stream)
+    {
+        SDL_UnbindAudioStream(player->output_audio_stream);
+    }
+}
+
+void SDLMovie_ResumePlayer(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return;
+
+    player->paused = false;
+    player->last_frame_at_ticks = SDL_GetTicks();
+
+    if (player->output_audio_stream)
+    {
+        SDL_BindAudioStream(player->bound_audio_device, player->output_audio_stream);
+    }
+}
+
+bool SDLMovie_IsPlayerPaused(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return false;
+
+    return player->paused;
+}
+
+float SDLMovie_GetPlayerCurrentTimeSeconds(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return 0;
+
+    return (float)player->current_time / 1000.0f;
+}
+
+Uint64 SDLMovie_GetPlayerCurrentTime(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return 0;
+
+    return player->current_time;
+}
+
+bool SDLMovie_SetPlayerVideoOutputTexture(
+    SDL_MoviePlayer *player,
+    SDL_Texture *texture)
+{
+    if (!check_player(player))
+        return SDL_SetError("Invalid player");
+
+    if (!player->mov->current_frame_surface)
+    {
+        return SDL_SetError("No video playback available, check if video track is selected");
+    }
+
+    if (texture->format != player->mov->current_frame_surface->format)
+    {
+        return SDL_SetError("Texture format does not match the video frame format");
+    }
+
+    player->output_video_frame_texture = texture;
+
+    return true;
+}
+
+const SDL_Surface *SDLMovie_GetPlayerCurrentVideoFrameSurface(
+    SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return NULL;
+
+    return player->current_video_frame_surface;
+}
+
+bool SDLMovie_HasPlayerFinished(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return false;
+
+    return player->finished;
+}
+/*
+
+Kinda complex to implement efficiently, so left as TODO.
+
+void SDLMovie_SeekPlayer(SDL_MoviePlayer *player, Uint64 time_ms)
+{
+    if (!check_player(player))
+        return;
+
+    player->current_time = time_ms;
+
+    player->next_video_frame_at = 0;
+    player->next_audio_frame_at = 0;
+    player->finished = false;
+}
+
+void SDLMovie_SeekPlayerSeconds(SDL_MoviePlayer *player, float time_s)
+{
+    return SDLMovie_SeekPlayer(player, (Uint64)(time_s * 1000));
+}*/

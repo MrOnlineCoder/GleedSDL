@@ -131,8 +131,6 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
 
     ctx->packet_no++;
 
-    movie->encoded_audio_buffer_cursor += current_packet_size;
-
     float **pcm;
 
     int samples = vorbis_synthesis_pcmout(&ctx->vd, &pcm);

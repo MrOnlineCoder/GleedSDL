@@ -142,7 +142,7 @@ SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *rend
     return texture;
 }
 
-void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint64 offset, Uint64 size)
+void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size)
 {
     if (!movie)
         return;
@@ -158,13 +158,27 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
         movie->cached_frames[track] = SDL_realloc(movie->cached_frames[track], movie->capacity_cached_frames[track] * sizeof(CachedMovieFrame));
     }
 
-    Uint64 last_frame_index = movie->count_cached_frames[track];
+    const int new_frame_index = movie->count_cached_frames[track];
 
-    CachedMovieFrame *frame = &movie->cached_frames[track][last_frame_index];
+    CachedMovieFrame *frame = &movie->cached_frames[track][new_frame_index];
 
     frame->timecode = timecode;
     frame->offset = offset;
     frame->size = size;
+
+    /* We record the actual memory offset for each frame (accumulating the sizes of previous frames) */
+    if (new_frame_index == 0)
+    {
+        frame->mem_offset = 0;
+    }
+    else
+    {
+        const int last_frame_index = new_frame_index - 1;
+
+        const CachedMovieFrame *last_frame = &movie->cached_frames[track][last_frame_index];
+
+        frame->mem_offset = last_frame->mem_offset + last_frame->size;
+    }
 
     movie->count_cached_frames[track]++;
 
@@ -172,7 +186,7 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
     movie->tracks[track].total_bytes += size;
 }
 
-int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint64 track_number)
+int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint32 track_number)
 {
     for (int i = 0; i < movie->ntracks; i++)
     {
@@ -368,34 +382,43 @@ void SDLMovie_ReadCurrentFrame(SDL_Movie *movie, SDL_MovieTrackType type)
     {
         CachedMovieFrame *frame = &movie->cached_frames[target_track_index][movie->current_audio_frame];
 
-        if (!movie->encoded_audio_frame || movie->encoded_audio_frame_size < frame->size)
+        /* If we have preloaded all our encoded audio data into one big buffer, just point inside it*/
+        if (movie->encoded_audio_buffer && movie->encoded_audio_buffer_size > 0)
         {
-            movie->encoded_audio_frame = SDL_realloc(movie->encoded_audio_frame, frame->size);
+            movie->encoded_audio_frame = movie->encoded_audio_buffer + frame->mem_offset;
         }
+        else
+        {
+            /* Otherwise, perform an IO read */
+            if (!movie->encoded_audio_frame || movie->encoded_audio_frame_size < frame->size)
+            {
+                movie->encoded_audio_frame = SDL_realloc(movie->encoded_audio_frame, frame->size);
+            }
 
-        SDL_SeekIO(movie->io, frame->offset, SDL_IO_SEEK_SET);
+            SDL_SeekIO(movie->io, frame->offset, SDL_IO_SEEK_SET);
 
-        SDL_ReadIO(movie->io, movie->encoded_audio_frame, frame->size);
+            SDL_ReadIO(movie->io, movie->encoded_audio_frame, frame->size);
+        }
 
         movie->encoded_audio_frame_size = frame->size;
     }
 }
 
-Uint64 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie)
+Uint32 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie)
 {
     if (!movie)
         return 0;
     return movie->last_frame_decode_ms;
 }
 
-Uint64 SDLMovie_GetTotalFrames(SDL_Movie *movie)
+Uint32 SDLMovie_GetTotalFrames(SDL_Movie *movie)
 {
     if (!movie)
         return 0;
     return movie->total_frames;
 }
 
-Uint64 SDLMovie_GetCurrentFrame(SDL_Movie *movie)
+Uint32 SDLMovie_GetCurrentFrame(SDL_Movie *movie)
 {
     if (!movie)
         return 0;
@@ -445,7 +468,7 @@ const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie)
     return movie->current_frame_surface;
 }
 
-void SDLMovie_SeekFrame(SDL_Movie *movie, Uint64 frame)
+void SDLMovie_SeekFrame(SDL_Movie *movie, Uint32 frame)
 {
     if (!movie)
         return;
@@ -536,14 +559,18 @@ const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie)
 bool SDLMovie_PreloadAudioStream(SDL_Movie *movie)
 {
     if (!movie)
-        return false;
+    {
+        return SDLMovie_SetError("movie is NULL");
+    }
 
     if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
-        return false;
+    {
+        return SDLMovie_SetError("No audio track selected for preload");
+    }
 
     SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
 
-    Uint64 buffer_size = audio_track->total_bytes;
+    const Uint32 buffer_size = audio_track->total_bytes;
 
     if (!movie->encoded_audio_buffer || movie->encoded_audio_buffer_size < buffer_size)
     {
@@ -551,9 +578,9 @@ bool SDLMovie_PreloadAudioStream(SDL_Movie *movie)
         movie->encoded_audio_buffer_size = buffer_size;
     }
 
-    Uint64 offset = 0;
+    Uint32 offset = 0;
 
-    for (Uint64 frame = 0; frame < audio_track->total_frames; frame++)
+    for (Uint32 frame = 0; frame < audio_track->total_frames; frame++)
     {
         CachedMovieFrame *frame_data = &movie->cached_frames[movie->current_audio_track][frame];
 
@@ -566,24 +593,7 @@ bool SDLMovie_PreloadAudioStream(SDL_Movie *movie)
         SDL_assert(offset <= buffer_size);
     }
 
-    movie->encoded_audio_buffer_cursor = 0;
-
     return true;
-}
-
-void *SDLMovie_ReadEncodedAudioData(SDL_Movie *movie, void *dest, int size)
-{
-    if (!movie || !movie->encoded_audio_buffer || movie->encoded_audio_buffer_cursor + size > movie->encoded_audio_buffer_size)
-    {
-        return NULL;
-    }
-
-    Uint8 *data = movie->encoded_audio_buffer + movie->encoded_audio_buffer_cursor;
-
-    if (dest)
-        SDL_memcpy(dest, data, size);
-
-    return data;
 }
 
 const SDL_MovieTrack *SDLMovie_GetTrack(const SDL_Movie *movie, int index)
@@ -614,4 +624,26 @@ Uint64 SDLMovie_MillisecondsToTimecode(SDL_Movie *movie, Uint64 ms)
     if (!movie)
         return 0;
     return ms * 1000000 / movie->timecode_scale;
+}
+
+CachedMovieFrame *SDLMovie_GetCurrentCachedFrame(SDL_Movie *movie, SDL_MovieTrackType type)
+{
+    if (!movie)
+        return NULL;
+
+    int target_track_index = type == SDL_MOVIE_TRACK_TYPE_VIDEO ? movie->current_video_track : movie->current_audio_track;
+
+    if (target_track_index == SDL_MOVIE_NO_TRACK)
+    {
+        return NULL;
+    }
+
+    if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+    {
+        return &movie->cached_frames[target_track_index][movie->current_frame];
+    }
+    else
+    {
+        return &movie->cached_frames[target_track_index][movie->current_audio_frame];
+    }
 }

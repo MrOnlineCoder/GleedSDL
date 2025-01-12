@@ -111,7 +111,7 @@ int main()
                 return 1;
             }
 
-            printf("Frame %llu decoded in %llu ms\n", SDLMovie_GetCurrentFrame(movie), SDLMovie_GetLastFrameDecodeTime(movie));
+            printf("Frame %d decoded in %d ms\n", SDLMovie_GetCurrentFrame(movie), SDLMovie_GetLastFrameDecodeTime(movie));
 
             /* Update playback texture */
             if (!SDLMovie_UpdatePlaybackTexture(movie, movieFrameTexture))

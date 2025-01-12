@@ -202,6 +202,13 @@ public:
 
         SDL_strlcpy(mt->language, track_entry.language.is_present() ? track_entry.language.value().c_str() : "eng", sizeof(mt->language));
 
+        /*
+            You may encounter integer precision loss warnings here, as WebM uses 64-bit integers for some values.
+
+            But it does not make sense everytime, for example for video width or audio channels count, so just ignore them,
+            it's intentional here.
+        */
+
         mt->track_number = track_entry.track_number.value();
 
         mt->type = trackType == webm::TrackType::kVideo ? SDL_MOVIE_TRACK_TYPE_VIDEO : SDL_MOVIE_TRACK_TYPE_AUDIO;

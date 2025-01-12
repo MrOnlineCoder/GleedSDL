@@ -81,24 +81,24 @@ extern "C"
         char codec_id[32]; /**< Matroska Codec ID of the track */
 
         Uint8 *codec_private_data; /**< Codec private data, if available */
-        Uint64 codec_private_size; /**< Size of the codec private data */
+        Uint32 codec_private_size; /**< Size of the codec private data */
 
-        Uint64 track_number;     /**< Track number in the file */
+        Uint32 track_number;     /**< Track number in the file */
         SDL_MovieTrackType type; /**< Track type (video or audio) */
 
-        Uint64 total_frames; /**< Total number of frames in the track */
-        Uint64 total_bytes;  /**< Total number of bytes in the track */
+        Uint32 total_frames; /**< Total number of frames in the track */
+        Uint32 total_bytes;  /**< Total number of bytes in the track */
 
         bool lacing; /**< True if the track uses lacing */
 
-        Uint64 video_width;      /**< Video frame width, non-zero only for video tracks */
-        Uint64 video_height;     /**< Video frame height, non-zero only for video tracks */
+        Uint32 video_width;      /**< Video frame width, non-zero only for video tracks */
+        Uint32 video_height;     /**< Video frame height, non-zero only for video tracks */
         double video_frame_rate; /**< Video frame rate, may not be specified in the file */
 
         double audio_sample_frequency; /**< Audio sample frequency, non-zero only for audio tracks */
         double audio_output_frequency; /**< Audio output frequency, non-zero only for audio tracks */
-        Uint64 audio_channels;         /**< Number of audio channels, non-zero only for audio tracks */
-        Uint64 audio_bit_depth;        /**< Audio bit depth, non-zero only for audio tracks */
+        Uint32 audio_channels;         /**< Number of audio channels, non-zero only for audio tracks */
+        Uint32 audio_bit_depth;        /**< Audio bit depth, non-zero only for audio tracks */
     } SDL_MovieTrack;
 
     /**
@@ -362,20 +362,6 @@ extern "C"
     extern const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie);
 
     /**
-     * Seek to a specific time in the movie
-     *
-     * This function allows you to seek to a specific time (in seconds) in the movie.
-     * The seek may be not precise, as it will seek to the nearest keyframe.
-     *
-     * If both audio and video tracks are present, it will seek to the nearest keyframe of the video track
-     * and sync the audio track to the video track.
-     *
-     * \param movie SDL_Movie instance
-     * \param time Time in seconds to seek to
-     */
-    extern void SDLMovie_SeekSeconds(SDL_Movie *movie, float time);
-
-    /**
      * Seek to a specific frame in the movie
      *
      * This function allows you to seek to a specific video frame in the movie.
@@ -387,7 +373,7 @@ extern "C"
      * \param movie SDL_Movie instance
      * \param frame Frame number to seek to
      */
-    extern void SDLMovie_SeekFrame(SDL_Movie *movie, Uint64 frame);
+    extern void SDLMovie_SeekFrame(SDL_Movie *movie, Uint32 frame);
 
     /**
      * Get the last frame decode time in milliseconds
@@ -399,7 +385,7 @@ extern "C"
      *
      * \returns Time in milliseconds, 0 if no frame was decoded yet or on error.
      */
-    extern Uint64 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie);
+    extern Uint32 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie);
 
     /**
      * Get the total number of video frames in the movie
@@ -407,7 +393,7 @@ extern "C"
      * \param movie SDL_Movie instance
      * \returns Total number of video frames in the movie, or 0 on error.
      */
-    extern Uint64 SDLMovie_GetTotalFrames(SDL_Movie *movie);
+    extern Uint32 SDLMovie_GetTotalFrames(SDL_Movie *movie);
 
     /**
      * Get the current video frame number
@@ -417,7 +403,7 @@ extern "C"
      * \param movie SDL_Movie instance
      * \returns Current video frame number, or 0 on error.
      */
-    extern Uint64 SDLMovie_GetCurrentFrame(SDL_Movie *movie);
+    extern Uint32 SDLMovie_GetCurrentFrame(SDL_Movie *movie);
 
     /**
      * Get the video size of the movie
@@ -446,9 +432,10 @@ extern "C"
      * Preload audio stream
      *
      * This function will load WHOLE audio stream into memory, so it can be played back without any delay.
+     * Take care when working with large audio tracks.
      * You may estimate the memory footprint of doing so by looking at track->total_bytes and track->total_frames.
      * It does not perform decoding, only loads the encoded audio data into memory.
-     * It will still need to seek and read frame separately because of the nature of the Matroska/WebM blocks.
+     * It will still need to seek and read each frame separately because of the nature of the Matroska/WebM blocks.
      *
      * \param movie SDL_Movie instance with configured audio track
      * \returns True on success, false on error. Call SDLMovie_GetError to get the error message.
@@ -466,9 +453,37 @@ extern "C"
 
     extern void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov);
 
-    extern bool SDLMovie_SetAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev);
+    extern bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev);
 
-    extern void SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms);
+    extern bool SDLMovie_SetPlayerVideoOutputTexture(
+        SDL_MoviePlayer *player,
+        SDL_Texture *texture);
+
+    typedef enum
+    {
+        SDL_MOVIE_PLAYER_UPDATE_NONE = 0,
+        SDL_MOVIE_PLAYER_UPDATE_AUDIO = 1 << 1,
+        SDL_MOVIE_PLAYER_UPDATE_VIDEO = 1 << 2,
+        SDL_MOVIE_PLAYER_UPDATE_ERROR = 1 << 3,
+    } SDL_MoviePlayerUpdateResult;
+
+    extern SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms);
+
+    extern const SDL_MovieAudioSample *SDLMovie_GetPlayerAvailableAudioSamples(
+        SDL_MoviePlayer *player,
+        int *count);
+
+    extern const SDL_Surface *SDLMovie_GetPlayerCurrentVideoFrameSurface(
+        SDL_MoviePlayer *player);
+
+    extern void SDLMovie_PausePlayer(SDL_MoviePlayer *player);
+    extern void SDLMovie_ResumePlayer(SDL_MoviePlayer *player);
+    extern bool SDLMovie_IsPlayerPaused(SDL_MoviePlayer *player);
+
+    extern bool SDLMovie_HasPlayerFinished(SDL_MoviePlayer *player);
+
+    extern float SDLMovie_GetPlayerCurrentTimeSeconds(SDL_MoviePlayer *player);
+    extern Uint64 SDLMovie_GetPlayerCurrentTime(SDL_MoviePlayer *player);
 
     extern void SDLMovie_FreePlayer(SDL_MoviePlayer *player);
 
