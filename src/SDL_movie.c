@@ -100,6 +100,11 @@ void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio)
         SDL_free(movie->encoded_video_frame);
     }
 
+    if (movie->decoded_audio_frame)
+    {
+        SDL_free(movie->decoded_audio_frame);
+    }
+
     if (movie->current_frame_surface)
     {
         SDL_DestroySurface(movie->current_frame_surface);
@@ -114,7 +119,10 @@ void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio)
     SDLMovie_Close_VPX(movie);
 
     if (closeio)
+    {
         SDL_CloseIO(movie->io);
+    }
+
     SDL_free(movie);
 }
 
@@ -142,7 +150,7 @@ SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *rend
     return texture;
 }
 
-void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size)
+void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size, bool key_frame)
 {
     if (!movie)
         return;
@@ -165,6 +173,7 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
     frame->timecode = timecode;
     frame->offset = offset;
     frame->size = size;
+    frame->key_frame = key_frame;
 
     /* We record the actual memory offset for each frame (accumulating the sizes of previous frames) */
     if (new_frame_index == 0)

@@ -14,6 +14,7 @@ extern "C"
         Uint32 mem_offset;
         Uint32 offset;
         Uint32 size;
+        bool key_frame;
     } CachedMovieFrame;
     typedef struct SDL_Movie
     {
@@ -82,7 +83,7 @@ extern "C"
 
     extern bool SDLMovie_SetError(const char *fmt, ...);
 
-    extern void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size);
+    extern void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size, bool key_frame);
 
     extern int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint32 track_number);
 

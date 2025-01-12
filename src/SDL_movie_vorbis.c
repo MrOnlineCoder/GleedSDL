@@ -10,7 +10,6 @@ typedef struct
     vorbis_block vb;
 
     int packet_no;
-    FILE *file;
 } VorbisContext;
 
 static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
@@ -89,8 +88,6 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
         return SDLMovie_SetError("Failed to initialize Vorbis block: %d", block_error);
     }
 
-    ctx->file = fopen("audio.pcm", "wb");
-
     movie->vorbis_context = ctx;
 
     return true;
@@ -165,7 +162,6 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
             const float sample = pcm[c][s];
             const int sample_index = s * ctx->vi.channels + c;
             movie->decoded_audio_frame[sample_index] = sample;
-            fwrite(&sample, sizeof(float), 1, ctx->file);
         }
     }
 
@@ -179,7 +175,6 @@ void SDLMovie_Close_Vorbis(SDL_Movie *movie)
     if (movie->vorbis_context)
     {
         VorbisContext *ctx = (VorbisContext *)movie->vorbis_context;
-        fclose(ctx->file);
         SDL_free(movie->vorbis_context);
         movie->vorbis_context = NULL;
     }

@@ -114,9 +114,18 @@ public:
             return webm::Status(webm::Status::kOkCompleted);
         }
 
+        m_isInKeyFrameBlock = simple_block.is_key_frame;
+
         m_currentBlockTrack = SDLMovie_FindTrackByNumber(m_movie, simple_block.track_number);
         m_currentBlockTimecode = simple_block.timecode;
         *action = m_currentBlockTrack >= 0 ? webm::Action::kRead : webm::Action::kSkip;
+        return webm::Status(webm::Status::kOkCompleted);
+    }
+
+    webm::Status OnSimpleBlockEnd(const webm::ElementMetadata &metadata,
+                                  const webm::SimpleBlock &simple_block) override
+    {
+        m_isInKeyFrameBlock = false;
         return webm::Status(webm::Status::kOkCompleted);
     }
 
@@ -148,7 +157,7 @@ public:
         {
             SDLMovie_AddCachedFrame(
                 m_movie,
-                m_currentBlockTrack, m_currentBlockTimecode, metadata.position, metadata.size);
+                m_currentBlockTrack, m_currentBlockTimecode, metadata.position, metadata.size, m_isInKeyFrameBlock);
         }
 
         return Skip(reader, bytes_remaining);
@@ -251,6 +260,7 @@ private:
     SDL_Movie *m_movie;
 
     int m_currentBlockTrack;
+    bool m_isInKeyFrameBlock;
     Uint64 m_currentBlockTimecode;
 };
 

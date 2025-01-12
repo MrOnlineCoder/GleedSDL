@@ -161,8 +161,37 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
         CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
             player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
 
-        while (SDLMovie_HasNextVideoFrame(player->mov) && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) <= player->current_time)
+        bool frame_changed = false;
+        int last_key_frame_index = -1;
+
+        while (SDLMovie_HasNextVideoFrame(player->mov) && next_frame_to_play && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) <= player->current_time)
         {
+            if (next_frame_to_play->key_frame)
+            {
+                last_key_frame_index = player->mov->current_frame;
+            }
+            SDLMovie_NextVideoFrame(player->mov);
+            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
+                player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
+            frame_changed = true;
+        }
+
+        if (frame_changed)
+        {
+            if (last_key_frame_index >= 0 && player->mov->current_frame != last_key_frame_index)
+            {
+                int back_frame = player->mov->current_frame;
+                SDLMovie_SeekFrame(player->mov, last_key_frame_index);
+
+                /* Key frames must be decoded prior to ensure correct rendering */
+                if (!SDLMovie_DecodeVideoFrame(player->mov))
+                {
+                    return SDL_MOVIE_PLAYER_UPDATE_ERROR;
+                }
+
+                SDLMovie_SeekFrame(player->mov, back_frame);
+            }
+
             if (!SDLMovie_DecodeVideoFrame(player->mov))
             {
                 return SDL_MOVIE_PLAYER_UPDATE_ERROR;
@@ -189,22 +218,18 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
                     player->output_video_frame_texture);
             }
 
-            SDLMovie_NextVideoFrame(player->mov);
-            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
-                player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
-        }
+            if (next_frame_to_play)
+            {
+                player->next_video_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
+            }
 
-        if (next_frame_to_play)
-        {
-            player->next_video_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
+            result |= SDL_MOVIE_PLAYER_UPDATE_VIDEO;
         }
 
         if (!SDLMovie_HasNextVideoFrame(player->mov))
         {
             player->finished = true;
         }
-
-        result |= SDL_MOVIE_PLAYER_UPDATE_VIDEO;
     }
 
     return result;
