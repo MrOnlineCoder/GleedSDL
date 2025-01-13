@@ -17,8 +17,7 @@ You can build the library with CMake. It has the following dependencies:
 - `libvpx` for V8 and V9 decoding
 - `libvorbis` and `libogg` for Vorbis decoding
 - `libwebm` for WebM parsing
-
-* `libopus` for Opus decoding
+- `libopus` for Opus decoding
 
 They are downloaded and build automatically via CMake FetchContent module, so in general you don't need to worry about them.
 
@@ -113,6 +112,12 @@ Please note, that this library was mostly written for educational purposes, and 
 ## Hardware acceleration
 
 For now, it does not support it, only accelerations available are implemented by codecs themselves (like multithreading, maybe). I have not yet researched this topic so far.
+
+## Memory usage
+
+This library uses quite a lot of dynamic memory allocations, but in general it should not have much impact on memory usage, as most allocations are for one-frame buffers.
+
+Although, as an option, you may explicitly call `SDLMovie_PreloadAudioStream` to preload whole audio track into memory for a smoother playback at a cost of longer loading time and higher memory usage.
 
 ## License
 

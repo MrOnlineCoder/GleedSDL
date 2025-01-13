@@ -214,7 +214,7 @@ public:
         /*
             You may encounter integer precision loss warnings here, as WebM uses 64-bit integers for some values.
 
-            But it does not make sense everytime, for example for video width or audio channels count, so just ignore them,
+            But it does not make sense everywhere, for example for video width or audio channels count, so just ignore them,
             it's intentional here.
         */
 

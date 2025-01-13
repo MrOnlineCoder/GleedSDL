@@ -211,8 +211,8 @@ extern "C"
      * Update playback texture with the current video frame
      *
      * This function will upload current video frame pixel data to the playback texture.
-     * It does not any strict checks on the texture, origin, so you may provide even
-     * your custom texture, but it must be compatible with video format.
+     * It does not perform any strict checks on the texture origin, so you may provide even
+     * your custom texture, but it must be compatible with the video format of the movie.
      *
      * During this operation, texture will be locked.
      *
@@ -398,7 +398,7 @@ extern "C"
     /**
      * Get the current video frame number
      *
-     * This number is increment with each call to SDLMovie_NextVideoFrame.
+     * This number is incremented with each call to SDLMovie_NextVideoFrame.
      *
      * \param movie SDL_Movie instance
      * \returns Current video frame number, or 0 on error.

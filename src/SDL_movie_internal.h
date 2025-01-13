@@ -8,13 +8,19 @@ extern "C"
 {
 #endif
 
+    /**
+     * This structure represents a single encoded frame of a movie track (video or audio).
+     *
+     * All frames for all supported tracks are loaded from Matroska/WebM Block elements during parsing,
+     * as they contain crucial information about when to play each frame and how big the frame is.
+     */
     typedef struct
     {
-        Uint64 timecode;
-        Uint32 mem_offset;
-        Uint32 offset;
-        Uint32 size;
-        bool key_frame;
+        Uint64 timecode;   /**< Time code of frame, in Matroska ticks */
+        Uint32 mem_offset; /**< Offset in memory, IF a frame data was stored continuously. This is crucial when you preload an audio stream for example  */
+        Uint32 offset;     /**< Offset of the frame in WebM file */
+        Uint32 size;       /**< Size of frame in WebM in bytes */
+        bool key_frame;    /**< If given frame is a keyframe, needed for seeking and maintaining codecs state */
     } CachedMovieFrame;
     typedef struct SDL_Movie
     {
@@ -85,6 +91,7 @@ extern "C"
     extern void SDLMovie_Close_Vorbis(SDL_Movie *movie);
 
     extern bool SDLMovie_DecodeOpus(SDL_Movie *movie);
+
     extern void SDLMovie_CloseOpus(SDL_Movie *movie);
 
     extern bool SDLMovie_SetError(const char *fmt, ...);
@@ -113,7 +120,7 @@ extern "C"
 
     typedef struct SDL_MoviePlayer
     {
-        bool paused;         /**< Is player pause */
+        bool paused;         /**< Is player pauses */
         bool finished;       /**< Is player finished playback (no more frames left) */
         bool video_playback; /**< Is video playback enabled */
         bool audio_playback; /**< Is audio playback enabled */
