@@ -485,6 +485,12 @@ extern "C"
     extern float SDLMovie_GetPlayerCurrentTimeSeconds(SDL_MoviePlayer *player);
     extern Uint64 SDLMovie_GetPlayerCurrentTime(SDL_MoviePlayer *player);
 
+    extern bool SDLMovie_IsPlayerAudioEnabled(SDL_MoviePlayer *player);
+    extern bool SDLMovie_IsPlayerVideoEnabled(SDL_MoviePlayer *player);
+
+    extern void SDLMovie_SetPlayerAudioEnabled(SDL_MoviePlayer *player, bool enabled);
+    extern void SDLMovie_SetPlayerVideoEnabled(SDL_MoviePlayer *player, bool enabled);
+
     extern void SDLMovie_FreePlayer(SDL_MoviePlayer *player);
 
 #ifdef __cplusplus

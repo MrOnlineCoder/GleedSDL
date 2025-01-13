@@ -65,7 +65,8 @@ static SDL_Colorspace vpx_cs_to_sdl_cs(vpx_color_space_t cs)
 
 bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 {
-    Uint64 decode_start = SDL_GetTicksNS();
+    printf("Decoding frame %d\n", movie->current_frame);
+    Uint64 decode_start = SDL_GetTicks();
 
     if (!movie->vpx_context)
     {
@@ -121,7 +122,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     if (decode_err != VPX_CODEC_OK)
     {
-        return SDLMovie_SetError("Failed to decode VP8 frame: %s", vpx_codec_err_to_string(decode_err));
+        return SDLMovie_SetError("Failed to decode VPX frame: %s", vpx_codec_err_to_string(decode_err));
     }
 
     vpx_codec_iter_t iter = NULL;
@@ -132,7 +133,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     if (!img)
     {
-        return SDLMovie_SetError("Failed to get decoded VP8 frame - received no image");
+        return SDLMovie_SetError("Failed to get decoded VPX frame - received no image");
     }
 
     if (!movie->current_frame_surface)
@@ -214,7 +215,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
             movie->current_frame_surface->pixels,
             movie->current_frame_surface->pitch))
     {
-        SDLMovie_SetError("Failed to convert VP8 frame to RGB: %s", SDL_GetError());
+        SDLMovie_SetError("Failed to convert VPX frame to RGB: %s", SDL_GetError());
         SDL_free(convert_buffer);
 
         return false;
@@ -224,8 +225,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     SDL_free(convert_buffer);
 
-    movie->last_frame_decode_ms = SDL_GetTicksNS() - decode_start;
-    movie->last_frame_decode_ms /= 1000000;
+    movie->last_frame_decode_ms = SDL_GetTicks() - decode_start;
 
     return true;
 }

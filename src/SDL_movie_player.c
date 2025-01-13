@@ -61,6 +61,8 @@ void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov)
     player->next_video_frame_at = 0;
     player->next_audio_frame_at = 0;
     player->finished = false;
+    player->video_playback = SDLMovie_CanPlaybackVideo(mov);
+    player->audio_playback = SDLMovie_CanPlaybackAudio(mov);
 
     SDLMovie_SeekFrame(player->mov, 0);
 }
@@ -108,7 +110,7 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
 
     player->last_frame_at_ticks = SDL_GetTicks();
 
-    if (SDLMovie_CanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
+    if (player->audio_playback && SDLMovie_CanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
     {
         const Uint64 preload_time = player->current_time + SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS;
 
@@ -156,7 +158,7 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
         result |= SDL_MOVIE_PLAYER_UPDATE_AUDIO;
     }
 
-    if (SDLMovie_CanPlaybackVideo(player->mov) && player->current_time >= player->next_video_frame_at)
+    if (player->video_playback && SDLMovie_CanPlaybackVideo(player->mov) && player->current_time >= player->next_video_frame_at)
     {
         CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
             player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
@@ -426,6 +428,49 @@ bool SDLMovie_HasPlayerFinished(SDL_MoviePlayer *player)
 
     return player->finished;
 }
+
+bool SDLMovie_IsPlayerAudioEnabled(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return false;
+
+    return player->audio_playback;
+}
+
+bool SDLMovie_IsPlayerVideoEnabled(SDL_MoviePlayer *player)
+{
+    if (!check_player(player))
+        return false;
+
+    return player->video_playback;
+}
+
+void SDLMovie_SetPlayerAudioEnabled(SDL_MoviePlayer *player, bool enabled)
+{
+    if (!check_player(player))
+        return;
+
+    if (!SDLMovie_CanPlaybackAudio(player->mov))
+    {
+        return;
+    }
+
+    player->audio_playback = enabled;
+}
+
+void SDLMovie_SetPlayerVideoEnabled(SDL_MoviePlayer *player, bool enabled)
+{
+    if (!check_player(player))
+        return;
+
+    if (!SDLMovie_CanPlaybackVideo(player->mov))
+    {
+        return;
+    }
+
+    player->video_playback = enabled;
+}
+
 /*
 
 Kinda complex to implement efficiently, so left as TODO.

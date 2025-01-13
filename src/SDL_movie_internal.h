@@ -44,8 +44,11 @@ extern "C"
 
         SDL_MovieAudioSample *decoded_audio_frame; /**< Decoded audio frame data */
         int decoded_audio_samples;                 /**< Number of decoded audio samples */
-        Uint32 decoded_audio_frame_size;           /**< Size of the decoded audio frame data */
+        Uint32 decoded_audio_frame_size;           /**< Size of the decoded audio frame
+                                                    (can be LARGER than decoded_audio_samples * sizeof(float),
+                                                    it's basically serving as buffer capacity) */
         void *vorbis_context;                      /**< Vorbis decoder context */
+        void *opus_context;                        /**< Opus decoder context */
         SDL_AudioSpec audio_spec;                  /**< Audio spec for the audio track */
         SDL_MovieCodecType audio_codec;            /**< Audio codec type */
 
@@ -81,6 +84,9 @@ extern "C"
 
     extern void SDLMovie_Close_Vorbis(SDL_Movie *movie);
 
+    extern bool SDLMovie_DecodeOpus(SDL_Movie *movie);
+    extern void SDLMovie_CloseOpus(SDL_Movie *movie);
+
     extern bool SDLMovie_SetError(const char *fmt, ...);
 
     extern void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size, bool key_frame);
@@ -107,9 +113,11 @@ extern "C"
 
     typedef struct SDL_MoviePlayer
     {
-        bool paused;    /**< Is player pause */
-        bool finished;  /**< Is player finished playback (no more frames left) */
-        SDL_Movie *mov; /**< Movie instance */
+        bool paused;         /**< Is player pause */
+        bool finished;       /**< Is player finished playback (no more frames left) */
+        bool video_playback; /**< Is video playback enabled */
+        bool audio_playback; /**< Is audio playback enabled */
+        SDL_Movie *mov;      /**< Movie instance */
 
         Uint64 last_frame_at_ticks; /**< Last frame time in ticks, used for syncronization */
 

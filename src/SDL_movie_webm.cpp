@@ -184,12 +184,12 @@ public:
             return webm::Status(webm::Status::kOkCompleted);
         }
 
-        if (trackType == webm::TrackType::kVideo && trackCodecId != "V_VP8")
+        if (trackType == webm::TrackType::kVideo && trackCodecId != "V_VP8" && trackCodecId != "V_VP9")
         {
             return webm::Status(webm::Status::kOkCompleted);
         }
 
-        if (trackType == webm::TrackType::kAudio && trackCodecId != "A_VORBIS")
+        if (trackType == webm::TrackType::kAudio && trackCodecId != "A_VORBIS" && trackCodecId != "A_OPUS")
         {
             return webm::Status(webm::Status::kOkCompleted);
         }

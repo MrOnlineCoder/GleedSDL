@@ -57,6 +57,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libvorbis)
 
+FetchContent_Declare(
+    libopus
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+    GIT_REPOSITORY "https://github.com/xiph/opus"
+    GIT_TAG "v1.5.2"
+)
+FetchContent_MakeAvailable(libopus)
+
 
 include(libvpx.cmake)
 
@@ -66,6 +75,7 @@ set(LIB_SOURCES
     src/SDL_movie.c
     src/SDL_movie_vorbis.c
     src/SDL_movie_player.c
+    src/SDL_movie_opus.c
 )
 
 add_library(
@@ -74,7 +84,7 @@ add_library(
     ${LIB_SOURCES}
 )
 
-target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx vorbis)
+target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx vorbis opus)
 target_include_directories(SDL_movie PRIVATE ${libwebm_SOURCE_DIR}/webm_parser/include)
 
 target_include_directories(SDL_movie PUBLIC include/)

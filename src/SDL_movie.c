@@ -513,6 +513,10 @@ bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie)
 
         return res == SDL_MOVIE_VORBIS_DECODE_DONE;
     }
+    else if (movie->audio_codec == SDL_MOVIE_CODEC_TYPE_OPUS)
+    {
+        return SDLMovie_DecodeOpus(movie);
+    }
 
     SDLMovie_SetError("Unsupported audio codec, frame not decoded");
 

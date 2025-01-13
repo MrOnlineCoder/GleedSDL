@@ -42,7 +42,7 @@ int main()
 
         This will parse the WebM file, and pre-select first available video and audio tracks.
     */
-    SDL_Movie *movie = SDLMovie_Open("bunny.webm");
+    SDL_Movie *movie = SDLMovie_Open("ocean.webm");
 
     if (!movie)
     {
@@ -66,6 +66,8 @@ int main()
     SDL_Texture *video_frame = SDLMovie_CreatePlaybackTexture(
         movie, renderer);
     SDLMovie_SetPlayerVideoOutputTexture(player, video_frame);
+
+    SDLMovie_SetPlayerVideoEnabled(player, false);
 
     bool running = true;
 
