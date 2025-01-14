@@ -65,7 +65,6 @@ static SDL_Colorspace vpx_cs_to_sdl_cs(vpx_color_space_t cs)
 
 bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 {
-    printf("Decoding frame %d\n", movie->current_frame);
     Uint64 decode_start = SDL_GetTicks();
 
     if (!movie->vpx_context)
@@ -122,13 +121,17 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     if (decode_err != VPX_CODEC_OK)
     {
-        return SDLMovie_SetError("Failed to decode VPX frame: %s", vpx_codec_err_to_string(decode_err));
+        return SDLMovie_SetError("Failed to decode VPX frame: %s, %s", vpx_codec_err_to_string(decode_err), vpx_codec_error_detail(codec));
     }
 
     vpx_codec_iter_t iter = NULL;
 
     vpx_image_t *img = NULL;
 
+    /*
+        Boom! We do not query for more frames here, although we have a damn iterator!
+        TODO: Implement a way to query for more frames and queue them up for rendering.
+    */
     img = vpx_codec_get_frame(codec, &iter);
 
     if (!img)
@@ -172,13 +175,13 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
         movie->conversion_video_frame_buffer_size = buffer_size;
     }
 
-    Uint8 *convert_buffer = (Uint8 *)SDL_calloc(
-        1, buffer_size);
+    Uint8 *convert_buffer = movie->conversion_video_frame_buffer;
 
     Uint8 *convert_buffer_write_ptr = convert_buffer;
 
     size_t bytes_copied = 0;
 
+    /* Some hacky conversion from VPX img planes format to SDL continuous buffer with 3 planes*/
     for (int plane = 0; plane < 3; plane++)
     {
         const int plane_height = vpx_img_plane_height(img, plane);
@@ -201,6 +204,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     SDL_LockSurface(movie->current_frame_surface);
 
+    /* Thank you SDL for this monster helper! */
     if (!SDL_ConvertPixelsAndColorspace(
             img->d_w,
             img->d_h,
@@ -222,8 +226,6 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
     }
 
     SDL_UnlockSurface(movie->current_frame_surface);
-
-    SDL_free(convert_buffer);
 
     movie->last_frame_decode_ms = SDL_GetTicks() - decode_start;
 

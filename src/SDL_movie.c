@@ -148,7 +148,7 @@ SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *rend
     SDL_Texture *texture = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_RGB24,
-        SDL_TEXTUREACCESS_STREAMING,
+        SDL_TEXTUREACCESS_STREAMING, /*The texture contents will be updated frequently*/
         SDLMovie_GetVideoTrack(movie)->video_width,
         SDLMovie_GetVideoTrack(movie)->video_height);
 
@@ -181,6 +181,7 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
 
     CachedMovieFrame *frame = &movie->cached_frames[track][new_frame_index];
 
+    /* Up to discussion if this is correct*/
     const Sint64 final_timecode = timecode - SDLMovie_MatroskaTicksToMilliseconds(movie, movie->tracks[track].codec_delay);
 
     if (final_timecode < 0)
@@ -438,7 +439,7 @@ Uint32 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie)
     return movie->last_frame_decode_ms;
 }
 
-Uint32 SDLMovie_GetTotalFrames(SDL_Movie *movie)
+Uint32 SDLMovie_GetTotalVideoFrames(SDL_Movie *movie)
 {
     if (!movie)
         return 0;
@@ -533,7 +534,6 @@ bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie)
     }
     else if (movie->audio_codec == SDL_MOVIE_CODEC_TYPE_OPUS)
     {
-        printf("Opus decoding frame %d\n", movie->current_audio_frame);
         return SDLMovie_DecodeOpus(movie);
     }
 

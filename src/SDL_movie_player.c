@@ -1,6 +1,6 @@
 #include "SDL_movie_internal.h"
 
-#define SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS 200
+#define SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS 50
 
 static bool check_player(SDL_MoviePlayer *player)
 {
@@ -64,21 +64,13 @@ void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov)
     player->video_playback = SDLMovie_CanPlaybackVideo(mov);
     player->audio_playback = SDLMovie_CanPlaybackAudio(mov);
 
+    /*Ideally, we should not do this, but for now let's assume player always plays movie from start*/
     SDLMovie_SeekFrame(player->mov, 0);
 
     SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(player->mov);
     SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(player->mov);
 
-    for (int n = 0; n < mov->ntracks; n++)
-    {
-        SDL_MovieTrack *track = &mov->tracks[n];
-        for (int c = 0; c < mov->count_cached_frames[n]; c++)
-        {
-            CachedMovieFrame *frame = &mov->cached_frames[n][c];
-            printf("Track %d, frame %d, timecode %lld, offset %d, size %d, key_frame %d\n", n, c, frame->timecode, frame->offset, frame->size, frame->key_frame);
-        }
-    }
-
+    /*TODO: not sure if this is correct, the description in Matroska spec is not clear for me*/
     if (audio_track && audio_track->codec_delay > 0)
     {
         player->next_audio_frame_at = SDLMovie_MatroskaTicksToMilliseconds(player->mov, audio_track->codec_delay);
@@ -116,23 +108,33 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
     if (!check_player(player))
         return SDL_MOVIE_PLAYER_UPDATE_NONE;
 
+    /*0 is treated as no time has passed*/
     if (time_delta_ms == 0)
         return SDL_MOVIE_PLAYER_UPDATE_NONE;
 
-    if (player->paused)
-        return SDL_MOVIE_PLAYER_UPDATE_NONE;
-
-    if (player->finished)
+    if (player->paused || player->finished)
         return SDL_MOVIE_PLAYER_UPDATE_NONE;
 
     SDL_MoviePlayerUpdateResult result = SDL_MOVIE_PLAYER_UPDATE_NONE;
 
+    /* Decide how much time passed since last update based on second argument*/
     const Uint64 time_passed = time_delta_ms < 0 ? SDL_GetTicks() - player->last_frame_at_ticks : time_delta_ms;
 
     player->current_time += time_passed;
 
+    /*
+        Intuitively, we should record that at end of update,
+        but decoding can take quite a lot of time,
+        so the next update must account for it too
+    */
     player->last_frame_at_ticks = SDL_GetTicks();
 
+    /*
+        Only advance audio if we
+        1) have it enabled
+        2) have audio track
+        3) it's time to play next frame
+    */
     if (player->audio_playback && SDLMovie_CanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
     {
         /* Audio output is much more sensitive to delays or interruptions, so we load a bit more samples */
@@ -141,8 +143,13 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
         CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
             player->mov, SDL_MOVIE_TRACK_TYPE_AUDIO);
 
+        /*
+            This function does not account for seeks, so we decode EACH frame until we reach the current time
+            assuming that really given time has passed since last update
+        */
         while (SDLMovie_HasNextAudioFrame(player->mov) && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) < preload_time)
         {
+            /*TODO: provide any recovery from such errors? maybe reset codec state */
             if (!SDLMovie_DecodeAudioFrame(player->mov))
             {
                 return SDL_MOVIE_PLAYER_UPDATE_ERROR;
@@ -152,16 +159,11 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
 
             const SDL_MovieAudioSample *samples = SDLMovie_GetAudioSamples(player->mov, NULL, &samples_count);
 
-            if (player->audio_buffer_count + samples_count > player->audio_buffer_capacity)
-            {
-                /* Rollback to start of buffer and start overwriting, user should've read them */
-                player->audio_buffer_count = 0;
-            }
-
             if (samples_count > 0)
             {
                 SDLMovie_AddAudioSamplesToPlayer(player, samples, samples_count);
 
+                /* If output is set up, add samples to stream right away and forget about them*/
                 if (player->output_audio_stream)
                 {
                     SDL_PutAudioStreamData(player->output_audio_stream, samples, samples_count * sizeof(SDL_MovieAudioSample));
@@ -174,6 +176,7 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
                 player->mov, SDL_MOVIE_TRACK_TYPE_AUDIO);
         }
 
+        /* We will play next frame only after this timecode*/
         if (next_frame_to_play)
         {
             player->next_audio_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
@@ -187,72 +190,57 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
         CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
             player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
 
-        bool frame_changed = false;
-        int last_key_frame_index = -1;
+        /*
+            This function does not account for seeks, so we decode EACH frame until we reach the current time
+            assuming that really given time has passed since last update.
 
+            Moreover, for some reasons quite a few .webm files I have tested do not have
+            keyframes set correctly, and even seeking back to them before decoding does not help.
+
+            This probably SHOULD be optimized, but I am not quite sure how for now.
+        */
         while (SDLMovie_HasNextVideoFrame(player->mov) && next_frame_to_play && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) <= player->current_time)
         {
-            if (next_frame_to_play->key_frame)
-            {
-                last_key_frame_index = player->mov->current_frame;
-            }
-            SDLMovie_NextVideoFrame(player->mov);
-            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
-                player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
-            frame_changed = true;
-        }
-
-        if (frame_changed)
-        {
-            if (last_key_frame_index >= 0 && player->mov->current_frame != last_key_frame_index)
-            {
-                printf("Decoding key-frame first: %d\n", last_key_frame_index);
-                int back_frame = player->mov->current_frame;
-                SDLMovie_SeekFrame(player->mov, last_key_frame_index);
-
-                /* Key frames must be decoded prior to ensure correct rendering */
-                if (!SDLMovie_DecodeVideoFrame(player->mov))
-                {
-                    return SDL_MOVIE_PLAYER_UPDATE_ERROR;
-                }
-
-                SDLMovie_SeekFrame(player->mov, back_frame);
-            }
-
             if (!SDLMovie_DecodeVideoFrame(player->mov))
             {
                 return SDL_MOVIE_PLAYER_UPDATE_ERROR;
             }
-
-            if (!player->current_video_frame_surface)
-            {
-                player->current_video_frame_surface = SDL_DuplicateSurface(
-                    (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov));
-            }
-            else
-            {
-                SDL_BlitSurface(
-                    (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov),
-                    NULL,
-                    player->current_video_frame_surface,
-                    NULL);
-            }
-
-            if (player->output_video_frame_texture)
-            {
-                SDLMovie_UpdatePlaybackTexture(
-                    player->mov,
-                    player->output_video_frame_texture);
-            }
-
-            if (next_frame_to_play)
-            {
-                player->next_video_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
-            }
-
-            result |= SDL_MOVIE_PLAYER_UPDATE_VIDEO;
+            SDLMovie_NextVideoFrame(player->mov);
+            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
+                player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
         }
 
+        /* Either create a surface or just blit it*/
+        if (!player->current_video_frame_surface)
+        {
+            player->current_video_frame_surface = SDL_DuplicateSurface(
+                (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov));
+        }
+        else
+        {
+            SDL_BlitSurface(
+                (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov),
+                NULL,
+                player->current_video_frame_surface,
+                NULL);
+        }
+
+        /* If user set a target texture, update it's contents*/
+        if (player->output_video_frame_texture)
+        {
+            SDLMovie_UpdatePlaybackTexture(
+                player->mov,
+                player->output_video_frame_texture);
+        }
+
+        if (next_frame_to_play)
+        {
+            player->next_video_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
+        }
+
+        result |= SDL_MOVIE_PLAYER_UPDATE_VIDEO;
+
+        /* Currently video is used as determining factor if movie has ended */
         if (!SDLMovie_HasNextVideoFrame(player->mov))
         {
             player->finished = true;
@@ -275,6 +263,7 @@ void SDLMovie_AddAudioSamplesToPlayer(
 
     if (!player->audio_buffer)
     {
+        /*Allocate a buffer for at least hardware-provided samples count + plus amount of samples for 1 second at given frequency */
         player->audio_buffer_capacity = player->mov->audio_spec.freq * player->mov->audio_spec.channels + player->audio_output_samples_buffer_size;
         player->audio_buffer = (SDL_MovieAudioSample *)SDL_calloc(player->audio_buffer_capacity, sizeof(SDL_MovieAudioSample));
 
@@ -285,6 +274,13 @@ void SDLMovie_AddAudioSamplesToPlayer(
         }
     }
 
+    if (player->audio_buffer_count + count > player->audio_buffer_capacity)
+    {
+        /* Rollback to start of buffer and start overwriting, user should've read them at this point */
+        player->audio_buffer_count = 0;
+    }
+
+    /* Copy the samples manually */
     for (int s = 0; s < count; s++)
     {
         player->audio_buffer[player->audio_buffer_count + s] = samples[s];
@@ -297,6 +293,11 @@ bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID de
 {
     if (!check_player(player))
         return SDL_SetError("Invalid player");
+
+    if (dev == SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK)
+    {
+        return SDL_SetError("Audio output device must be already opened or 0 to disable");
+    }
 
     if (!SDLMovie_CanPlaybackAudio(player->mov))
     {
@@ -322,6 +323,7 @@ bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID de
         return SDLMovie_SetError("Failed to get audio device format: %s", SDL_GetError());
     }
 
+    /* 1024 is the reasonable default?*/
     if (!player->audio_output_samples_buffer_size)
     {
         player->audio_output_samples_buffer_size = 1024;
@@ -421,6 +423,12 @@ bool SDLMovie_SetPlayerVideoOutputTexture(
 {
     if (!check_player(player))
         return SDL_SetError("Invalid player");
+
+    if (texture == NULL)
+    {
+        player->output_video_frame_texture = NULL;
+        return true;
+    }
 
     if (!player->mov->current_frame_surface)
     {

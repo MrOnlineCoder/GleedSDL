@@ -42,6 +42,8 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
      * WebM audio tracks are not Ogg streams, they are pure Vorbis encoded data, so we don't use any of ogg_sync/ogg_stream functions.
      *
      * Therefore, we "fake" it by creating the packet manually.
+     *
+     * The first 3 bytes are the number of packets, the size of the Vorbis ID header, and the size of the Vorbis comment header.
      */
     ogg_packet header;
     header.packet = audio_track->codec_private_data + 3;
@@ -116,6 +118,7 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
 
     int current_packet_size = movie->encoded_audio_frame_size;
 
+    /*Another fake ogg packet to feed into libvorbis */
     ogg_packet packet = {0};
     packet.packetno = ctx->packet_no;
     packet.bytes = current_packet_size;
@@ -167,7 +170,7 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
         for (int s = 0; s < samples; s++)
         {
             const float sample = pcm[c][s];
-            const int sample_index = s * ctx->vi.channels + c;
+            const int sample_index = ctx->vi.channels * s + c;
             movie->decoded_audio_frame[sample_index] = sample;
         }
     }

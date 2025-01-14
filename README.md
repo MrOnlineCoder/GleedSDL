@@ -2,12 +2,14 @@
 
 This is a simple library for playing **.webm** movies with SDL3. It is intended to be mostly used for playing short cinematics in games, but cautious usage for other purposes is also possible.
 
+⚡️ Experimental until said elsewise. 😜
+
 ## Features
 
 - Provides SDL-like C API
 - API mostly inspired by RAD's Bink Video, but with focus on open-source formats and codecs
 - Supports .webm files with **VP8** or **VP9** for video codecs, and **Vorbis** or **Opus** for audio codecs
-- Provides utility functions for playing back video via `SDL_Texture`
+- Provides utility functions for playing back video frames into `SDL_Texture` and rendering with `SDL_Renderer`
 - Audio samples may be directly fed to `SDL_AudioStream`
 
 ## Building and linking
@@ -30,6 +32,7 @@ Note: you will need a C++ compiler to build this library, as `libwebm` parser is
 See [basic.cpp](examples/basic.cpp) for a simple example playing Big Buck Bunny short trailer using more low-level `SDL_Movie` object.
 
 See another [player.cpp](examples/player.cpp) with more high-level `SDL_MoviePlayer` object, which handles all the timing and synchronization for you and is the **recommended way** to use the library, unless you have specific needs.
+It allows also selecting a movie out of different codec variants.
 
 The API is documented in the header file itself: [SDL_movie.h](include/SDL_movie.h).
 
@@ -42,7 +45,7 @@ The general workflow for `SDL_Movie` is the following:
 5. Call `SDLMovie_NextVideoFrame` and `SDLMovie_NextAudioFrame` to advance to the next frame. Use `SDLMovie_HasNextVideoFrame` and `SDLMovie_HasNextAudioFrame` to check if there are more frames to decode.
 6. When done, call `SDLMovie_FreeMovie` to free resources.
 
-**However**, the main problem with that workflow is that it all timing and synchronization is left to the user. Doing all that a frame rate higher than the original will cause inconsistent playback speed and audio desync.
+**However**, the main problem with that workflow is that it all timing and synchronization is left to the user. Doing the process above at a frame rate higher than the movie's original will cause inconsistent playback speed and audio desync.
 
 Therefore, it's advised to use `SDL_MoviePlayer`. Aside from handling timing for you, it also supports:
 
@@ -53,7 +56,7 @@ Therefore, it's advised to use `SDL_MoviePlayer`. Aside from handling timing for
 - Automatic calculation of time delta (pass `SDL_MOVIE_PLAYER_TIME_DELTA_AUTO` as second argument to `SDLMovie_UpdatePlayer`)
 - _Probably will support seeking in future_
 
-Very quick example with the player:
+Very quick example with the player (no error checking):
 
 ```cpp
 // Initialization
@@ -69,7 +72,7 @@ SDLMovie_SetPlayerVideoOutputTexture(player, video_frame);
 SDLMovie_SetPlayerAudioOutput(player, audio_device); // your SDL_AudioDevice, already opened
 
 // Update loop
-SDLMovie_UpdatePlayer(player, SDL_MOVIE_PLAYER_TIME_DELTA_AUTO); //second argument is time delta, you can your own
+SDLMovie_UpdatePlayer(player, SDL_MOVIE_PLAYER_TIME_DELTA_AUTO); //second argument is time delta, you can provide your own
 
 // Rendering
 SDL_RenderCopy(renderer, video_frame, NULL, NULL); // render video frame
@@ -107,7 +110,7 @@ ffmpeg -i input.mp4 -c:v libvpx -c:a libopus output.webm
 
 ## Stability note
 
-Please note, that this library was mostly written for educational purposes, and this was my first time working with low-level codecs such as VP8 and Vorbis, therefore, it may contain bugs or memory leaks. Use it at your own risk, and feel free to report any issues.
+Please note, that this library was mostly written for educational purposes, and this was my first time working with low-level codecs such as VP8 and Vorbis, therefore, it may contain bugs or memory leaks. Use it at your own risk, and feel free to report any issues or suggestions.
 
 ## Hardware acceleration
 

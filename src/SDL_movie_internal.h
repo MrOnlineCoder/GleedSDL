@@ -1,3 +1,9 @@
+/**
+ * Internal functions and structures for SDL_movie library.
+ *
+ * Should not be used directly by the user, as it's not part of the public API.
+ */
+
 #ifndef SDL_MOVIE_INTERNAL_H
 #define SDL_MOVIE_INTERNAL_H
 
@@ -17,7 +23,7 @@ extern "C"
     typedef struct
     {
         Uint64 timecode;   /**< Time code of frame, in Matroska ticks */
-        Uint32 mem_offset; /**< Offset in memory, IF a frame data was stored continuously. This is crucial when you preload an audio stream for example  */
+        Uint32 mem_offset; /**< Offset in memory, IF frame data was stored continuously. This is crucial when you preload an audio stream for example  */
         Uint32 offset;     /**< Offset of the frame in WebM file */
         Uint32 size;       /**< Size of frame in WebM in bytes */
         bool key_frame;    /**< Is given frame a keyframe; needed for seeking and maintaining codecs state */
@@ -37,7 +43,7 @@ extern "C"
         Uint32 encoded_video_frame_size;           /**< Size of the encoded video frame data */
         Uint8 *conversion_video_frame_buffer;      /**< Buffer for decoded video frame data, can be used by decoder to reduce allocations */
         Uint32 conversion_video_frame_buffer_size; /**< Size of the buffer for decoded video frame data */
-        void *vpx_context;                         /**< VPX decoder context */
+        void *vpx_context;                         /**< VPX decoder context (both VP8 and VP9) */
         SDL_PixelFormat video_pixel_format;        /**< Pixel format for the video track */
         SDL_Surface *current_frame_surface;        /**< Current video frame surface, containing decoded frame pixels */
         SDL_MovieCodecType video_codec;            /**< Video codec type */
@@ -53,14 +59,14 @@ extern "C"
         Uint32 decoded_audio_frame_size;           /**< Size of the decoded audio frame
                                                     (can be LARGER than decoded_audio_samples * sizeof(float),
                                                     it's basically serving as buffer capacity) */
-        void *vorbis_context;                      /**< Vorbis decoder context */
-        void *opus_context;                        /**< Opus decoder context */
+        void *vorbis_context;                      /**< Vorbis decoder context, NULL if vorbis not used */
+        void *opus_context;                        /**< Opus decoder context, NULL if opus not used */
         SDL_AudioSpec audio_spec;                  /**< Audio spec for the audio track */
         SDL_MovieCodecType audio_codec;            /**< Audio codec type */
 
         Uint64 timecode_scale; /**< Timecode scale from WebM file */
 
-        Uint32 last_frame_decode_ms; /**< Time in milliseconds to decode last frame */
+        Uint32 last_frame_decode_ms; /**< Time in milliseconds spent to decode last frame */
 
         Uint32 current_frame; /**< Current frame number */
         Uint32 total_frames;  /**< Total number of frames in the movie */
@@ -122,13 +128,13 @@ extern "C"
 
     typedef struct SDL_MoviePlayer
     {
-        bool paused;         /**< Is player pauses */
-        bool finished;       /**< Is player finished playback (no more frames left) */
+        bool paused;         /**< Is player paused */
+        bool finished;       /**< Has player finished playback (no more frames left) */
         bool video_playback; /**< Is video playback enabled */
         bool audio_playback; /**< Is audio playback enabled */
         SDL_Movie *mov;      /**< Movie instance */
 
-        Uint64 last_frame_at_ticks; /**< Last frame time in ticks, used for syncronization */
+        Uint64 last_frame_at_ticks; /**< Last frame time in ticks, used for synchronization */
 
         Uint64 current_time; /**< Current playback (movie) time in milliseconds */
 
@@ -150,6 +156,9 @@ extern "C"
         SDL_MoviePlayer *player,
         const SDL_MovieAudioSample *samples,
         int count);
+
+    /* Not currently ready to be exposed as public API, as switching movies can be tricky*/
+    extern void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov);
 
 #ifdef __cplusplus
 }

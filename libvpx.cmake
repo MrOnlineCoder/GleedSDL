@@ -6,19 +6,6 @@ cmake_minimum_required (VERSION 2.16)
 
 set (LIBVPX_GIT            "https://github.com/webmproject/libvpx.git" )
 
-
-option (LIBVPX_FORCE_BUILD    "Force build and installation of package?" YES  )
-
-
-#	configure.args  --enable-vp8 \
-#	                --enable-psnr \
-#	                --enable-postproc \
-#	                --enable-multithread \
-#	                --enable-runtime-cpu-detect \
-#	                --disable-install-docs \
-#	                --disable-debug-libs \
-#	                --disable-examples
-
 set(LIBVPX_PREFIX ${PROJECT_BINARY_DIR}/libvpx)
 
 ExternalProject_Add (vpx_dependency

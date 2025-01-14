@@ -9,7 +9,7 @@ set(C_STANDARD 99)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-set(MAJOR_VERSION 3)
+set(MAJOR_VERSION 1)
 set(MINOR_VERSION 0)
 set(MICRO_VERSION 0)
 project(SDL3_movie
@@ -78,10 +78,11 @@ set(LIB_SOURCES
     src/SDL_movie_opus.c
 )
 
+# TODO: add shared library support
 add_library(
-    SDL_movie
-    STATIC
-    ${LIB_SOURCES}
+        SDL_movie
+        STATIC
+        ${LIB_SOURCES}
 )
 
 target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx vorbis opus)

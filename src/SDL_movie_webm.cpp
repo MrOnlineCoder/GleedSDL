@@ -105,7 +105,7 @@ public:
     }
 
     webm::Status OnClusterBegin(const webm::ElementMetadata &metadata,
-                                const webm::Cluster &cluster, webm::Action *action)
+                                const webm::Cluster &cluster, webm::Action *action) override
     {
         if (cluster.timecode.is_present())
         {

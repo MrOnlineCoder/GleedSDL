@@ -50,6 +50,11 @@ bool SDLMovie_DecodeOpus(SDL_Movie *movie)
 
     int samples_count = per_channel_samples_decoded * movie->audio_spec.channels;
 
+    /*
+        Decoded audio frame will actually be bigger than the number of samples decoded
+
+        But this allows us to have a decently big buffer
+    */
     if (!movie->decoded_audio_frame || movie->decoded_audio_frame_size < ctx->pcm_buffer_size)
     {
         movie->decoded_audio_frame = (SDL_MovieAudioSample *)SDL_realloc(movie->decoded_audio_frame, ctx->pcm_buffer_size);
@@ -60,6 +65,7 @@ bool SDLMovie_DecodeOpus(SDL_Movie *movie)
         SDL_memset(movie->decoded_audio_frame, 0, ctx->pcm_buffer_size);
     }
 
+    /* Please do not change to memcpy for more explicit and readable copying*/
     for (int s = 0; s < samples_count; s++)
     {
         const float sample = ctx->pcm_buffer[s];

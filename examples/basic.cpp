@@ -4,6 +4,11 @@
     It plays a classical Big Buck Bunny trailer in WebM format (bunny.webm)
 
     You can press '0' on the keyboard to restart the movie from the beginning.
+
+    This example only show usage of lower-level SDL_Movie API
+    and does not handle time synchronization between audio and video tracks.
+
+    For more advanced features and the recommended way to play movies, see SDL_MoviePlayer example (player.cpp)
 */
 
 #include <iostream>
