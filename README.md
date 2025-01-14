@@ -1,5 +1,7 @@
 # SDL_movie
 
+![Screenshot of Bunny Demo](examples/bunny_screenshot.png)
+
 This is a simple library for playing **.webm** movies with SDL3. It is intended to be mostly used for playing short cinematics in games, but cautious usage for other purposes is also possible.
 
 ⚡️ Experimental until said elsewise. 😜
