@@ -104,6 +104,21 @@ public:
         return webm::Status(webm::Status::kOkCompleted);
     }
 
+    webm::Status OnClusterBegin(const webm::ElementMetadata &metadata,
+                                const webm::Cluster &cluster, webm::Action *action)
+    {
+        if (cluster.timecode.is_present())
+        {
+            m_currentClusterTimecode = cluster.timecode.value();
+        }
+        else
+        {
+            m_currentClusterTimecode = 0;
+        }
+        *action = webm::Action::kRead;
+        return webm::Status(webm::Status::kOkCompleted);
+    }
+
     webm::Status OnSimpleBlockBegin(const webm::ElementMetadata &metadata,
                                     const webm::SimpleBlock &simple_block,
                                     webm::Action *action) override
@@ -155,9 +170,10 @@ public:
     {
         if (m_currentBlockTrack != -1)
         {
+            const auto resultingTimecode = m_currentClusterTimecode + m_currentBlockTimecode;
             SDLMovie_AddCachedFrame(
                 m_movie,
-                m_currentBlockTrack, m_currentBlockTimecode, metadata.position, metadata.size, m_isInKeyFrameBlock);
+                m_currentBlockTrack, resultingTimecode, metadata.position, metadata.size, m_isInKeyFrameBlock);
         }
 
         return Skip(reader, bytes_remaining);
@@ -253,6 +269,16 @@ public:
             }
         }
 
+        if (track_entry.codec_delay.is_present())
+        {
+            mt->codec_delay = track_entry.codec_delay.value();
+        }
+
+        if (track_entry.seek_pre_roll.is_present())
+        {
+            mt->seek_pre_roll = track_entry.seek_pre_roll.value();
+        }
+
         return webm::Status(webm::Status::kOkCompleted);
     }
 
@@ -262,6 +288,7 @@ private:
     int m_currentBlockTrack;
     bool m_isInKeyFrameBlock;
     Uint64 m_currentBlockTimecode;
+    Uint64 m_currentClusterTimecode;
 };
 
 extern "C"

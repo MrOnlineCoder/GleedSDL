@@ -3,6 +3,14 @@
 
 static char sdl_movie_error[1024] = {0};
 
+static int SDLMovie_CachedFrameComparator(const void *a, const void *b)
+{
+    const CachedMovieFrame *frame_a = (const CachedMovieFrame *)a;
+    const CachedMovieFrame *frame_b = (const CachedMovieFrame *)b;
+
+    return frame_a->timecode - frame_b->timecode;
+}
+
 bool SDLMovie_SetError(const char *fmt, ...)
 {
     va_list ap;
@@ -69,6 +77,9 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
             {
                 SDLMovie_SelectTrack(movie, SDL_MOVIE_TRACK_TYPE_AUDIO, i);
             }
+
+            /* Important step to ensure we have frames ordered chronologically, by timecode */
+            SDL_qsort(movie->cached_frames[i], movie->count_cached_frames[i], sizeof(CachedMovieFrame), SDLMovie_CachedFrameComparator);
         }
     }
 
@@ -170,7 +181,14 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
 
     CachedMovieFrame *frame = &movie->cached_frames[track][new_frame_index];
 
-    frame->timecode = timecode;
+    const Sint64 final_timecode = timecode - SDLMovie_MatroskaTicksToMilliseconds(movie, movie->tracks[track].codec_delay);
+
+    if (final_timecode < 0)
+    {
+        return;
+    }
+
+    frame->timecode = final_timecode;
     frame->offset = offset;
     frame->size = size;
     frame->key_frame = key_frame;
@@ -515,6 +533,7 @@ bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie)
     }
     else if (movie->audio_codec == SDL_MOVIE_CODEC_TYPE_OPUS)
     {
+        printf("Opus decoding frame %d\n", movie->current_audio_frame);
         return SDLMovie_DecodeOpus(movie);
     }
 
@@ -659,4 +678,10 @@ CachedMovieFrame *SDLMovie_GetCurrentCachedFrame(SDL_Movie *movie, SDL_MovieTrac
     {
         return &movie->cached_frames[target_track_index][movie->current_audio_frame];
     }
+}
+
+Uint64 SDLMovie_MatroskaTicksToMilliseconds(SDL_Movie *movie, Uint64 ticks)
+{
+    /*Matroska ticks are nanoseconds, convert to ms*/
+    return ticks / 1000000;
 }

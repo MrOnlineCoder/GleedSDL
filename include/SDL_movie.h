@@ -83,6 +83,9 @@ extern "C"
         Uint8 *codec_private_data; /**< Codec private data, if available */
         Uint32 codec_private_size; /**< Size of the codec private data */
 
+        Uint64 codec_delay;   /**< Codec delay, if available, in Matroska ticks */
+        Uint64 seek_pre_roll; /**< Seek pre-roll, if available, in Matroska ticks */
+
         Uint32 track_number;     /**< Track number in the file */
         SDL_MovieTrackType type; /**< Track type (video or audio) */
 

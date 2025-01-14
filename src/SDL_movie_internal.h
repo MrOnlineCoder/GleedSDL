@@ -9,9 +9,9 @@ extern "C"
 #endif
 
     /**
-     * This structure represents a single encoded frame of a movie track (video or audio).
+     * This structure represents metadata of a single encoded frame of a movie track (video or audio).
      *
-     * All frames for all supported tracks are loaded from Matroska/WebM Block elements during parsing,
+     * All frames metadata for all supported tracks are loaded from Matroska/WebM Block elements during parsing,
      * as they contain crucial information about when to play each frame and how big the frame is.
      */
     typedef struct
@@ -20,7 +20,7 @@ extern "C"
         Uint32 mem_offset; /**< Offset in memory, IF a frame data was stored continuously. This is crucial when you preload an audio stream for example  */
         Uint32 offset;     /**< Offset of the frame in WebM file */
         Uint32 size;       /**< Size of frame in WebM in bytes */
-        bool key_frame;    /**< If given frame is a keyframe, needed for seeking and maintaining codecs state */
+        bool key_frame;    /**< Is given frame a keyframe; needed for seeking and maintaining codecs state */
     } CachedMovieFrame;
     typedef struct SDL_Movie
     {
@@ -49,7 +49,7 @@ extern "C"
         Uint32 encoded_audio_buffer_size; /**< Encoded audio buffer size */
 
         SDL_MovieAudioSample *decoded_audio_frame; /**< Decoded audio frame data */
-        int decoded_audio_samples;                 /**< Number of decoded audio samples */
+        int decoded_audio_samples;                 /**< Number of decoded audio samples combined for all channels */
         Uint32 decoded_audio_frame_size;           /**< Size of the decoded audio frame
                                                     (can be LARGER than decoded_audio_samples * sizeof(float),
                                                     it's basically serving as buffer capacity) */
@@ -115,6 +115,8 @@ extern "C"
     extern CachedMovieFrame *SDLMovie_GetCurrentCachedFrame(SDL_Movie *movie, SDL_MovieTrackType type);
 
     extern Uint64 SDLMovie_TimecodeToMilliseconds(SDL_Movie *movie, Uint64 timecode);
+
+    extern Uint64 SDLMovie_MatroskaTicksToMilliseconds(SDL_Movie *movie, Uint64 ticks);
 
     extern Uint64 SDLMovie_MillisecondsToTimecode(SDL_Movie *movie, Uint64 ms);
 

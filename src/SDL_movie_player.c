@@ -20,9 +20,9 @@ SDL_MoviePlayer *SDLMovie_CreatePlayer(SDL_Movie *mov)
         return NULL;
     }
 
-    player->last_frame_at_ticks = SDL_GetTicks();
-
     SDLMovie_SetPlayerMovie(player, mov);
+
+    player->last_frame_at_ticks = SDL_GetTicks();
 
     return player;
 }
@@ -65,6 +65,29 @@ void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov)
     player->audio_playback = SDLMovie_CanPlaybackAudio(mov);
 
     SDLMovie_SeekFrame(player->mov, 0);
+
+    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(player->mov);
+    SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(player->mov);
+
+    for (int n = 0; n < mov->ntracks; n++)
+    {
+        SDL_MovieTrack *track = &mov->tracks[n];
+        for (int c = 0; c < mov->count_cached_frames[n]; c++)
+        {
+            CachedMovieFrame *frame = &mov->cached_frames[n][c];
+            printf("Track %d, frame %d, timecode %lld, offset %d, size %d, key_frame %d\n", n, c, frame->timecode, frame->offset, frame->size, frame->key_frame);
+        }
+    }
+
+    if (audio_track && audio_track->codec_delay > 0)
+    {
+        player->next_audio_frame_at = SDLMovie_MatroskaTicksToMilliseconds(player->mov, audio_track->codec_delay);
+    }
+
+    if (video_track && video_track->codec_delay > 0)
+    {
+        player->next_video_frame_at = SDLMovie_MatroskaTicksToMilliseconds(player->mov, video_track->codec_delay);
+    }
 }
 
 void SDLMovie_FreePlayer(SDL_MoviePlayer *player)
@@ -112,6 +135,7 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
 
     if (player->audio_playback && SDLMovie_CanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
     {
+        /* Audio output is much more sensitive to delays or interruptions, so we load a bit more samples */
         const Uint64 preload_time = player->current_time + SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS;
 
         CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
@@ -182,6 +206,7 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
         {
             if (last_key_frame_index >= 0 && player->mov->current_frame != last_key_frame_index)
             {
+                printf("Decoding key-frame first: %d\n", last_key_frame_index);
                 int back_frame = player->mov->current_frame;
                 SDLMovie_SeekFrame(player->mov, last_key_frame_index);
 

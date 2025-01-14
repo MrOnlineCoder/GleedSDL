@@ -36,6 +36,13 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     Uint8 vorbis_id_header_size = audio_track->codec_private_data[1];
     Uint8 vorbis_comment_header_size = audio_track->codec_private_data[2];
 
+    /**
+     * For some reason, libvorbis has a hard dependency on libogg and expects packets to be in ogg_packet format.
+     *
+     * WebM audio tracks are not Ogg streams, they are pure Vorbis encoded data, so we don't use any of ogg_sync/ogg_stream functions.
+     *
+     * Therefore, we "fake" it by creating the packet manually.
+     */
     ogg_packet header;
     header.packet = audio_track->codec_private_data + 3;
     header.packetno = 0;
