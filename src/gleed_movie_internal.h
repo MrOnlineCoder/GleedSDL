@@ -1,5 +1,5 @@
 /**
- * Internal functions and structures for SDL_movie library.
+ * Internal functions and structures for gleed library.
  *
  * Should not be used directly by the user, as it's not part of the public API.
  */

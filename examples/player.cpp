@@ -55,7 +55,7 @@ int main()
         return 1;
     }
 
-    SDL_Window *window = SDL_CreateWindow("SDL_movie Player Example", 800, 600, 0);
+    SDL_Window *window = SDL_CreateWindow("Gleed Player Example", 800, 600, 0);
 
     if (!window)
     {

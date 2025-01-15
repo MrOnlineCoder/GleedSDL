@@ -29,7 +29,7 @@ They are downloaded and build automatically via CMake FetchContent module, so in
 
 The only problem is that if you are using SDL_mixer for example, it also depends on `libvorbis` and `libogg`, which causes these dependencies to be built/linked twice. I am open to suggestions on how to solve this issue.
 
-Note: you will need a C++ compiler to build this library, as `libwebm` parser is written in C++, which is used internally by SDL_movie.
+Note: you will need a C++ compiler to build this library, as `libwebm` parser is written in C++, which is used internally by Gleed.
 
 ## Usage
 
