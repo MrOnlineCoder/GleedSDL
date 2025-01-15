@@ -38,7 +38,7 @@ See [basic.cpp](examples/basic.cpp) for a simple example playing Big Buck Bunny 
 See another [player.cpp](examples/player.cpp) with more high-level `GleedMoviePlayer` object, which handles all the timing and synchronization for you and is the **recommended way** to use the library, unless you have specific needs.
 It allows also selecting a movie out of different codec variants.
 
-The API is documented in the header file itself: [SDL_movie.h](include/SDL_movie.h).
+The API is documented in the header file itself: [gleed.h](include/gleed.h).
 
 The general workflow for `GleedMovie` is the following:
 
