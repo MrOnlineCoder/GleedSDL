@@ -18,7 +18,7 @@ This is a simple library for playing **.webm** movies with SDL3. It is intended 
 
 You can build the library with CMake. It has the following dependencies:
 
-- `libvpx` for V8 and V9 decoding
+- `libvpx` for VP8 and VP9 decoding
 - `libvorbis` and `libogg` for Vorbis decoding
 - `libwebm` for WebM parsing
 - `libopus` for Opus decoding
