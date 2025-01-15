@@ -1,4 +1,4 @@
-#include "SDL_movie_internal.h"
+#include "gleed_movie_internal.h"
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
 
@@ -12,12 +12,12 @@ typedef struct
     int packet_no;
 } VorbisContext;
 
-static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
+static bool GleedInitVorbis(GleedMovie *movie)
 {
-    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+    GleedMovieTrack *audio_track = GleedGetAudioTrack(movie);
     if (!audio_track->codec_private_data)
     {
-        return SDLMovie_SetError("No codec private data available for Vorbis audio track");
+        return GleedSetError("No codec private data available for Vorbis audio track");
     }
 
     Uint8 vorbis_init_packets_count = audio_track->codec_private_data[0];
@@ -25,7 +25,7 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     /* According to: https://www.matroska.org/technical/codec_specs.html */
     if (vorbis_init_packets_count != 2)
     {
-        return SDLMovie_SetError("Invalid number of Vorbis initialization packets: %d", vorbis_init_packets_count);
+        return GleedSetError("Invalid number of Vorbis initialization packets: %d", vorbis_init_packets_count);
     }
 
     VorbisContext *ctx = (VorbisContext *)SDL_calloc(1, sizeof(VorbisContext));
@@ -57,7 +57,7 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     if (header_in_error != 0)
     {
         SDL_free(ctx);
-        return SDLMovie_SetError("Failed to parse Vorbis ID header: %d", header_in_error);
+        return GleedSetError("Failed to parse Vorbis ID header: %d", header_in_error);
     }
 
     header.packet = audio_track->codec_private_data + 3 + vorbis_id_header_size;
@@ -69,7 +69,7 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     if (header_in_error != 0)
     {
         SDL_free(ctx);
-        return SDLMovie_SetError("Failed to parse Vorbis comment header: %d", header_in_error);
+        return GleedSetError("Failed to parse Vorbis comment header: %d", header_in_error);
     }
 
     header.packet = audio_track->codec_private_data + 3 + vorbis_id_header_size + vorbis_comment_header_size;
@@ -80,13 +80,13 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     if (header_in_error != 0)
     {
         SDL_free(ctx);
-        return SDLMovie_SetError("Failed to parse Vorbis codebooks header: %d", header_in_error);
+        return GleedSetError("Failed to parse Vorbis codebooks header: %d", header_in_error);
     }
 
     if (vorbis_synthesis_init(&ctx->vd, &ctx->vi) != 0)
     {
         SDL_free(ctx);
-        return SDLMovie_SetError("Failed to initialize Vorbis synthesis");
+        return GleedSetError("Failed to initialize Vorbis synthesis");
     }
 
     int block_error = vorbis_block_init(&ctx->vd, &ctx->vb);
@@ -94,7 +94,7 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     if (block_error != 0)
     {
         SDL_free(ctx);
-        return SDLMovie_SetError("Failed to initialize Vorbis block: %d", block_error);
+        return GleedSetError("Failed to initialize Vorbis block: %d", block_error);
     }
 
     movie->vorbis_context = ctx;
@@ -102,15 +102,15 @@ static bool SDLMovie_Init_Vorbis(SDL_Movie *movie)
     return true;
 }
 
-VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
+VorbisDecodeResult GleedDecode_Vorbis(GleedMovie *movie)
 {
-    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+    GleedMovieTrack *audio_track = GleedGetAudioTrack(movie);
 
     if (!movie->vorbis_context)
     {
-        if (!SDLMovie_Init_Vorbis(movie))
+        if (!GleedInitVorbis(movie))
         {
-            return SDL_MOVIE_VORBIS_INIT_ERROR;
+            return GLEED_VORBIS_INIT_ERROR;
         }
     }
 
@@ -126,14 +126,14 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
 
     if (vorbis_synthesis(&ctx->vb, &packet) != 0)
     {
-        SDLMovie_SetError("Failed to synthesize Vorbis packet");
-        return SDL_MOVIE_VORBIS_DECODE_ERROR;
+        GleedSetError("Failed to synthesize Vorbis packet");
+        return GLEED_VORBIS_DECODE_ERROR;
     }
 
     if (vorbis_synthesis_blockin(&ctx->vd, &ctx->vb) != 0)
     {
-        SDLMovie_SetError("Failed to synthesize Vorbis block");
-        return SDL_MOVIE_VORBIS_DECODE_ERROR;
+        GleedSetError("Failed to synthesize Vorbis block");
+        return GLEED_VORBIS_DECODE_ERROR;
     }
 
     ctx->packet_no++;
@@ -144,19 +144,19 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
 
     if (vorbis_synthesis_read(&ctx->vd, samples) != 0)
     {
-        SDLMovie_SetError("Failed to mark read samples in Vorbis synthesis");
-        return SDL_MOVIE_VORBIS_DECODE_ERROR;
+        GleedSetError("Failed to mark read samples in Vorbis synthesis");
+        return GLEED_VORBIS_DECODE_ERROR;
     }
 
     if (samples == 0)
-        return SDL_MOVIE_VORBIS_DECODE_DONE;
+        return GLEED_VORBIS_DECODE_DONE;
 
     const int total_samples = samples * ctx->vi.channels;
     const int total_pcm_size = total_samples * sizeof(float);
 
     if (!movie->decoded_audio_frame || movie->decoded_audio_frame_size < total_pcm_size)
     {
-        movie->decoded_audio_frame = (SDL_MovieAudioSample *)SDL_realloc(movie->decoded_audio_frame, total_pcm_size);
+        movie->decoded_audio_frame = (GleedMovieAudioSample *)SDL_realloc(movie->decoded_audio_frame, total_pcm_size);
         movie->decoded_audio_frame_size = total_pcm_size;
     }
     else
@@ -177,10 +177,10 @@ VorbisDecodeResult SDLMovie_Decode_Vorbis(SDL_Movie *movie)
 
     movie->decoded_audio_samples = samples;
 
-    return SDL_MOVIE_VORBIS_DECODE_DONE;
+    return GLEED_VORBIS_DECODE_DONE;
 }
 
-void SDLMovie_Close_Vorbis(SDL_Movie *movie)
+void GleedCloseVorbis(GleedMovie *movie)
 {
     if (movie->vorbis_context)
     {

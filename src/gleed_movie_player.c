@@ -1,57 +1,57 @@
-#include "SDL_movie_internal.h"
+#include "gleed_movie_internal.h"
 
-#define SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS 50
+#define GLEED_PLAYER_SOUND_PRELOAD_MS 50
 
-static bool check_player(SDL_MoviePlayer *player)
+static bool check_player(GleedMoviePlayer *player)
 {
     return player && player->mov;
 }
 
-SDL_MoviePlayer *SDLMovie_CreatePlayer(SDL_Movie *mov)
+GleedMoviePlayer *GleedCreatePlayer(GleedMovie *mov)
 {
     if (!mov)
         return NULL;
 
-    SDL_MoviePlayer *player = (SDL_MoviePlayer *)SDL_calloc(1, sizeof(SDL_MoviePlayer));
+    GleedMoviePlayer *player = (GleedMoviePlayer *)SDL_calloc(1, sizeof(GleedMoviePlayer));
 
     if (!player)
     {
-        SDLMovie_SetError("Failed to allocate memory for movie player");
+        GleedSetError("Failed to allocate memory for movie player");
         return NULL;
     }
 
-    SDLMovie_SetPlayerMovie(player, mov);
+    GleedSetPlayerMovie(player, mov);
 
     player->last_frame_at_ticks = SDL_GetTicks();
 
     return player;
 }
 
-SDL_MoviePlayer *SDLMovie_CreatePlayerFromPath(const char *path)
+GleedMoviePlayer *GleedCreatePlayerFromPath(const char *path)
 {
-    SDL_Movie *mov = SDLMovie_Open(path);
+    GleedMovie *mov = GleedOpen(path);
 
     if (!mov)
     {
         return NULL;
     }
 
-    return SDLMovie_CreatePlayer(mov);
+    return GleedCreatePlayer(mov);
 }
 
-SDL_MoviePlayer *SDLMovie_CreatePlayerFromIO(SDL_IOStream *io)
+GleedMoviePlayer *GleedCreatePlayerFromIO(SDL_IOStream *io)
 {
-    SDL_Movie *mov = SDLMovie_OpenIO(io);
+    GleedMovie *mov = GleedOpenIO(io);
 
     if (!mov)
     {
         return NULL;
     }
 
-    return SDLMovie_CreatePlayer(mov);
+    return GleedCreatePlayer(mov);
 }
 
-void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov)
+void GleedSetPlayerMovie(GleedMoviePlayer *player, GleedMovie *mov)
 {
     if (!player || !mov)
         return;
@@ -61,28 +61,28 @@ void SDLMovie_SetPlayerMovie(SDL_MoviePlayer *player, SDL_Movie *mov)
     player->next_video_frame_at = 0;
     player->next_audio_frame_at = 0;
     player->finished = false;
-    player->video_playback = SDLMovie_CanPlaybackVideo(mov);
-    player->audio_playback = SDLMovie_CanPlaybackAudio(mov);
+    player->video_playback = GleedCanPlaybackVideo(mov);
+    player->audio_playback = GleedCanPlaybackAudio(mov);
 
     /*Ideally, we should not do this, but for now let's assume player always plays movie from start*/
-    SDLMovie_SeekFrame(player->mov, 0);
+    GleedSeekFrame(player->mov, 0);
 
-    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(player->mov);
-    SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(player->mov);
+    GleedMovieTrack *audio_track = GleedGetAudioTrack(player->mov);
+    GleedMovieTrack *video_track = GleedGetVideoTrack(player->mov);
 
     /*TODO: not sure if this is correct, the description in Matroska spec is not clear for me*/
     if (audio_track && audio_track->codec_delay > 0)
     {
-        player->next_audio_frame_at = SDLMovie_MatroskaTicksToMilliseconds(player->mov, audio_track->codec_delay);
+        player->next_audio_frame_at = GleedMatroskaTicksToMilliseconds(player->mov, audio_track->codec_delay);
     }
 
     if (video_track && video_track->codec_delay > 0)
     {
-        player->next_video_frame_at = SDLMovie_MatroskaTicksToMilliseconds(player->mov, video_track->codec_delay);
+        player->next_video_frame_at = GleedMatroskaTicksToMilliseconds(player->mov, video_track->codec_delay);
     }
 }
 
-void SDLMovie_FreePlayer(SDL_MoviePlayer *player)
+void GleedFreePlayer(GleedMoviePlayer *player)
 {
     if (!player)
         return;
@@ -103,19 +103,19 @@ void SDLMovie_FreePlayer(SDL_MoviePlayer *player)
     SDL_free(player);
 }
 
-SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms)
+GleedMoviePlayerUpdateResult GleedUpdatePlayer(GleedMoviePlayer *player, int time_delta_ms)
 {
     if (!check_player(player))
-        return SDL_MOVIE_PLAYER_UPDATE_NONE;
+        return GLEED_PLAYER_UPDATE_NONE;
 
     /*0 is treated as no time has passed*/
     if (time_delta_ms == 0)
-        return SDL_MOVIE_PLAYER_UPDATE_NONE;
+        return GLEED_PLAYER_UPDATE_NONE;
 
     if (player->paused || player->finished)
-        return SDL_MOVIE_PLAYER_UPDATE_NONE;
+        return GLEED_PLAYER_UPDATE_NONE;
 
-    SDL_MoviePlayerUpdateResult result = SDL_MOVIE_PLAYER_UPDATE_NONE;
+    GleedMoviePlayerUpdateResult result = GLEED_PLAYER_UPDATE_NONE;
 
     /* Decide how much time passed since last update based on second argument*/
     const Uint64 time_passed = time_delta_ms < 0 ? SDL_GetTicks() - player->last_frame_at_ticks : time_delta_ms;
@@ -129,66 +129,10 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
     */
     player->last_frame_at_ticks = SDL_GetTicks();
 
-    /*
-        Only advance audio if we
-        1) have it enabled
-        2) have audio track
-        3) it's time to play next frame
-    */
-    if (player->audio_playback && SDLMovie_CanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
+    if (player->video_playback && GleedCanPlaybackVideo(player->mov) && player->current_time >= player->next_video_frame_at)
     {
-        /* Audio output is much more sensitive to delays or interruptions, so we load a bit more samples */
-        const Uint64 preload_time = player->current_time + SDL_MOVIE_PLAYER_SOUND_PRELOAD_MS;
-
-        CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
-            player->mov, SDL_MOVIE_TRACK_TYPE_AUDIO);
-
-        /*
-            This function does not account for seeks, so we decode EACH frame until we reach the current time
-            assuming that really given time has passed since last update
-        */
-        while (SDLMovie_HasNextAudioFrame(player->mov) && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) < preload_time)
-        {
-            /*TODO: provide any recovery from such errors? maybe reset codec state */
-            if (!SDLMovie_DecodeAudioFrame(player->mov))
-            {
-                return SDL_MOVIE_PLAYER_UPDATE_ERROR;
-            }
-
-            int samples_count;
-
-            const SDL_MovieAudioSample *samples = SDLMovie_GetAudioSamples(player->mov, NULL, &samples_count);
-
-            if (samples_count > 0)
-            {
-                SDLMovie_AddAudioSamplesToPlayer(player, samples, samples_count);
-
-                /* If output is set up, add samples to stream right away and forget about them*/
-                if (player->output_audio_stream)
-                {
-                    SDL_PutAudioStreamData(player->output_audio_stream, samples, samples_count * sizeof(SDL_MovieAudioSample));
-                    player->audio_buffer_count = 0;
-                }
-            }
-
-            SDLMovie_NextAudioFrame(player->mov);
-            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
-                player->mov, SDL_MOVIE_TRACK_TYPE_AUDIO);
-        }
-
-        /* We will play next frame only after this timecode*/
-        if (next_frame_to_play)
-        {
-            player->next_audio_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
-        }
-
-        result |= SDL_MOVIE_PLAYER_UPDATE_AUDIO;
-    }
-
-    if (player->video_playback && SDLMovie_CanPlaybackVideo(player->mov) && player->current_time >= player->next_video_frame_at)
-    {
-        CachedMovieFrame *next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
-            player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
+        CachedMovieFrame *next_frame_to_play = GleedGetCurrentCachedFrame(
+            player->mov, GLEED_TRACK_TYPE_VIDEO);
 
         /*
             This function does not account for seeks, so we decode EACH frame until we reach the current time
@@ -199,27 +143,27 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
 
             This probably SHOULD be optimized, but I am not quite sure how for now.
         */
-        while (SDLMovie_HasNextVideoFrame(player->mov) && next_frame_to_play && SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) <= player->current_time)
+        while (GleedHasNextVideoFrame(player->mov) && next_frame_to_play && GleedTimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) <= player->current_time)
         {
-            if (!SDLMovie_DecodeVideoFrame(player->mov))
+            if (!GleedDecodeVideoFrame(player->mov))
             {
-                return SDL_MOVIE_PLAYER_UPDATE_ERROR;
+                return GLEED_PLAYER_UPDATE_ERROR;
             }
-            SDLMovie_NextVideoFrame(player->mov);
-            next_frame_to_play = SDLMovie_GetCurrentCachedFrame(
-                player->mov, SDL_MOVIE_TRACK_TYPE_VIDEO);
+            GleedNextVideoFrame(player->mov);
+            next_frame_to_play = GleedGetCurrentCachedFrame(
+                player->mov, GLEED_TRACK_TYPE_VIDEO);
         }
 
         /* Either create a surface or just blit it*/
         if (!player->current_video_frame_surface)
         {
             player->current_video_frame_surface = SDL_DuplicateSurface(
-                (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov));
+                (SDL_Surface *)GleedGetVideoFrameSurface(player->mov));
         }
         else
         {
             SDL_BlitSurface(
-                (SDL_Surface *)SDLMovie_GetVideoFrameSurface(player->mov),
+                (SDL_Surface *)GleedGetVideoFrameSurface(player->mov),
                 NULL,
                 player->current_video_frame_surface,
                 NULL);
@@ -228,31 +172,87 @@ SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int t
         /* If user set a target texture, update it's contents*/
         if (player->output_video_frame_texture)
         {
-            SDLMovie_UpdatePlaybackTexture(
+            GleedUpdatePlaybackTexture(
                 player->mov,
                 player->output_video_frame_texture);
         }
 
         if (next_frame_to_play)
         {
-            player->next_video_frame_at = SDLMovie_TimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
+            player->next_video_frame_at = GleedTimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
         }
 
-        result |= SDL_MOVIE_PLAYER_UPDATE_VIDEO;
+        result |= GLEED_PLAYER_UPDATE_VIDEO;
 
         /* Currently video is used as determining factor if movie has ended */
-        if (!SDLMovie_HasNextVideoFrame(player->mov))
+        if (!GleedHasNextVideoFrame(player->mov))
         {
             player->finished = true;
         }
     }
 
+    /*
+       Only advance audio if we
+       1) have it enabled
+       2) have audio track
+       3) it's time to play next frame
+   */
+    if (player->audio_playback && GleedCanPlaybackAudio(player->mov) && player->current_time >= player->next_audio_frame_at)
+    {
+        /* Audio output is much more sensitive to delays or interruptions, so we load a bit more samples */
+        const Uint64 preload_time = player->current_time + GLEED_PLAYER_SOUND_PRELOAD_MS;
+
+        CachedMovieFrame *next_frame_to_play = GleedGetCurrentCachedFrame(
+            player->mov, GLEED_TRACK_TYPE_AUDIO);
+
+        /*
+            This function does not account for seeks, so we decode EACH frame until we reach the current time
+            assuming that really given time has passed since last update
+        */
+        while (GleedHasNextAudioFrame(player->mov) && GleedTimecodeToMilliseconds(player->mov, next_frame_to_play->timecode) < preload_time)
+        {
+            /*TODO: provide any recovery from such errors? maybe reset codec state */
+            if (!GleedDecodeAudioFrame(player->mov))
+            {
+                return GLEED_PLAYER_UPDATE_ERROR;
+            }
+
+            int samples_count;
+
+            const GleedMovieAudioSample *samples = GleedGetAudioSamples(player->mov, NULL, &samples_count);
+
+            if (samples_count > 0)
+            {
+                GleedAddAudioSamplesToPlayer(player, samples, samples_count);
+
+                /* If output is set up, add samples to stream right away and forget about them*/
+                if (player->output_audio_stream)
+                {
+                    SDL_PutAudioStreamData(player->output_audio_stream, samples, samples_count * sizeof(GleedMovieAudioSample));
+                    player->audio_buffer_count = 0;
+                }
+            }
+
+            GleedNextAudioFrame(player->mov);
+            next_frame_to_play = GleedGetCurrentCachedFrame(
+                player->mov, GLEED_TRACK_TYPE_AUDIO);
+        }
+
+        /* We will play next frame only after this timecode*/
+        if (next_frame_to_play)
+        {
+            player->next_audio_frame_at = GleedTimecodeToMilliseconds(player->mov, next_frame_to_play->timecode);
+        }
+
+        result |= GLEED_PLAYER_UPDATE_AUDIO;
+    }
+
     return result;
 }
 
-void SDLMovie_AddAudioSamplesToPlayer(
-    SDL_MoviePlayer *player,
-    const SDL_MovieAudioSample *samples,
+void GleedAddAudioSamplesToPlayer(
+    GleedMoviePlayer *player,
+    const GleedMovieAudioSample *samples,
     int count)
 {
     if (!check_player(player))
@@ -265,11 +265,11 @@ void SDLMovie_AddAudioSamplesToPlayer(
     {
         /*Allocate a buffer for at least hardware-provided samples count + plus amount of samples for 1 second at given frequency */
         player->audio_buffer_capacity = player->mov->audio_spec.freq * player->mov->audio_spec.channels + player->audio_output_samples_buffer_size;
-        player->audio_buffer = (SDL_MovieAudioSample *)SDL_calloc(player->audio_buffer_capacity, sizeof(SDL_MovieAudioSample));
+        player->audio_buffer = (GleedMovieAudioSample *)SDL_calloc(player->audio_buffer_capacity, sizeof(GleedMovieAudioSample));
 
         if (!player->audio_buffer)
         {
-            SDLMovie_SetError("Failed to allocate memory for audio buffer");
+            GleedSetError("Failed to allocate memory for audio buffer");
             return;
         }
     }
@@ -289,7 +289,7 @@ void SDLMovie_AddAudioSamplesToPlayer(
     player->audio_buffer_count += count;
 }
 
-bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev)
+bool GleedSetPlayerAudioOutput(GleedMoviePlayer *player, SDL_AudioDeviceID dev)
 {
     if (!check_player(player))
         return SDL_SetError("Invalid player");
@@ -299,9 +299,9 @@ bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID de
         return SDL_SetError("Audio output device must be already opened or 0 to disable");
     }
 
-    if (!SDLMovie_CanPlaybackAudio(player->mov))
+    if (!GleedCanPlaybackAudio(player->mov))
     {
-        return SDLMovie_SetError("No audio track selected");
+        return GleedSetError("No audio track selected");
     }
 
     if (player->output_audio_stream)
@@ -320,7 +320,7 @@ bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID de
     SDL_AudioSpec dst_audio_spec;
     if (!SDL_GetAudioDeviceFormat(dev, &dst_audio_spec, &player->audio_output_samples_buffer_size))
     {
-        return SDLMovie_SetError("Failed to get audio device format: %s", SDL_GetError());
+        return GleedSetError("Failed to get audio device format: %s", SDL_GetError());
     }
 
     /* 1024 is the reasonable default?*/
@@ -336,13 +336,13 @@ bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID de
 
     if (!player->output_audio_stream)
     {
-        return SDLMovie_SetError("Failed to create audio stream: %s", SDL_GetError());
+        return GleedSetError("Failed to create audio stream: %s", SDL_GetError());
     }
 
     if (!SDL_BindAudioStream(dev, player->output_audio_stream))
     {
         SDL_DestroyAudioStream(player->output_audio_stream);
-        return SDLMovie_SetError("Failed to bind audio stream: %s", SDL_GetError());
+        return GleedSetError("Failed to bind audio stream: %s", SDL_GetError());
     }
 
     player->bound_audio_device = dev;
@@ -350,8 +350,8 @@ bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID de
     return true;
 }
 
-const SDL_MovieAudioSample *SDLMovie_GetPlayerAvailableAudioSamples(
-    SDL_MoviePlayer *player,
+const GleedMovieAudioSample *GleedGetPlayerAvailableAudioSamples(
+    GleedMoviePlayer *player,
     int *count)
 {
     if (!check_player(player))
@@ -366,7 +366,7 @@ const SDL_MovieAudioSample *SDLMovie_GetPlayerAvailableAudioSamples(
     return player->audio_buffer;
 }
 
-void SDLMovie_PausePlayer(SDL_MoviePlayer *player)
+void GleedPausePlayer(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return;
@@ -379,7 +379,7 @@ void SDLMovie_PausePlayer(SDL_MoviePlayer *player)
     }
 }
 
-void SDLMovie_ResumePlayer(SDL_MoviePlayer *player)
+void GleedResumePlayer(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return;
@@ -393,7 +393,7 @@ void SDLMovie_ResumePlayer(SDL_MoviePlayer *player)
     }
 }
 
-bool SDLMovie_IsPlayerPaused(SDL_MoviePlayer *player)
+bool GleedIsPlayerPaused(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return false;
@@ -401,7 +401,7 @@ bool SDLMovie_IsPlayerPaused(SDL_MoviePlayer *player)
     return player->paused;
 }
 
-float SDLMovie_GetPlayerCurrentTimeSeconds(SDL_MoviePlayer *player)
+float GleedGetPlayerCurrentTimeSeconds(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return 0;
@@ -409,7 +409,7 @@ float SDLMovie_GetPlayerCurrentTimeSeconds(SDL_MoviePlayer *player)
     return (float)player->current_time / 1000.0f;
 }
 
-Uint64 SDLMovie_GetPlayerCurrentTime(SDL_MoviePlayer *player)
+Uint64 GleedGetPlayerCurrentTime(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return 0;
@@ -417,8 +417,8 @@ Uint64 SDLMovie_GetPlayerCurrentTime(SDL_MoviePlayer *player)
     return player->current_time;
 }
 
-bool SDLMovie_SetPlayerVideoOutputTexture(
-    SDL_MoviePlayer *player,
+bool GleedSetPlayerVideoOutputTexture(
+    GleedMoviePlayer *player,
     SDL_Texture *texture)
 {
     if (!check_player(player))
@@ -445,8 +445,8 @@ bool SDLMovie_SetPlayerVideoOutputTexture(
     return true;
 }
 
-const SDL_Surface *SDLMovie_GetPlayerCurrentVideoFrameSurface(
-    SDL_MoviePlayer *player)
+const SDL_Surface *GleedGetPlayerCurrentVideoFrameSurface(
+    GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return NULL;
@@ -454,7 +454,7 @@ const SDL_Surface *SDLMovie_GetPlayerCurrentVideoFrameSurface(
     return player->current_video_frame_surface;
 }
 
-bool SDLMovie_HasPlayerFinished(SDL_MoviePlayer *player)
+bool GleedHasPlayerFinished(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return false;
@@ -462,7 +462,7 @@ bool SDLMovie_HasPlayerFinished(SDL_MoviePlayer *player)
     return player->finished;
 }
 
-bool SDLMovie_IsPlayerAudioEnabled(SDL_MoviePlayer *player)
+bool GleedIsPlayerAudioEnabled(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return false;
@@ -470,7 +470,7 @@ bool SDLMovie_IsPlayerAudioEnabled(SDL_MoviePlayer *player)
     return player->audio_playback;
 }
 
-bool SDLMovie_IsPlayerVideoEnabled(SDL_MoviePlayer *player)
+bool GleedIsPlayerVideoEnabled(GleedMoviePlayer *player)
 {
     if (!check_player(player))
         return false;
@@ -478,12 +478,12 @@ bool SDLMovie_IsPlayerVideoEnabled(SDL_MoviePlayer *player)
     return player->video_playback;
 }
 
-void SDLMovie_SetPlayerAudioEnabled(SDL_MoviePlayer *player, bool enabled)
+void GleedSetPlayerAudioEnabled(GleedMoviePlayer *player, bool enabled)
 {
     if (!check_player(player))
         return;
 
-    if (!SDLMovie_CanPlaybackAudio(player->mov))
+    if (!GleedCanPlaybackAudio(player->mov))
     {
         return;
     }
@@ -491,12 +491,12 @@ void SDLMovie_SetPlayerAudioEnabled(SDL_MoviePlayer *player, bool enabled)
     player->audio_playback = enabled;
 }
 
-void SDLMovie_SetPlayerVideoEnabled(SDL_MoviePlayer *player, bool enabled)
+void GleedSetPlayerVideoEnabled(GleedMoviePlayer *player, bool enabled)
 {
     if (!check_player(player))
         return;
 
-    if (!SDLMovie_CanPlaybackVideo(player->mov))
+    if (!GleedCanPlaybackVideo(player->mov))
     {
         return;
     }
@@ -508,7 +508,7 @@ void SDLMovie_SetPlayerVideoEnabled(SDL_MoviePlayer *player, bool enabled)
 
 Kinda complex to implement efficiently, so left as TODO.
 
-void SDLMovie_SeekPlayer(SDL_MoviePlayer *player, Uint64 time_ms)
+void GleedSeekPlayer(GleedMoviePlayer *player, Uint64 time_ms)
 {
     if (!check_player(player))
         return;
@@ -520,7 +520,7 @@ void SDLMovie_SeekPlayer(SDL_MoviePlayer *player, Uint64 time_ms)
     player->finished = false;
 }
 
-void SDLMovie_SeekPlayerSeconds(SDL_MoviePlayer *player, float time_s)
+void GleedSeekPlayerSeconds(GleedMoviePlayer *player, float time_s)
 {
-    return SDLMovie_SeekPlayer(player, (Uint64)(time_s * 1000));
+    return GleedSeekPlayer(player, (Uint64)(time_s * 1000));
 }*/

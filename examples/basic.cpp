@@ -1,21 +1,21 @@
 /*
-    SDL_Movie Example
+    GleedMovie Example
 
     It plays a classical Big Buck Bunny trailer in WebM format (bunny.webm)
 
     You can press '0' on the keyboard to restart the movie from the beginning.
 
-    This example only show usage of lower-level SDL_Movie API
+    This example only show usage of lower-level GleedMovie API
     and does not handle time synchronization between audio and video tracks.
 
-    For more advanced features and the recommended way to play movies, see SDL_MoviePlayer example (player.cpp)
+    For more advanced features and the recommended way to play movies, see GleedMoviePlayer example (player.cpp)
 */
 
 #include <iostream>
 #include <fstream>
 #include <SDL3/SDL.h>
 
-#include <SDL_movie.h>
+#include <gleed.h>
 
 int main()
 {
@@ -26,7 +26,7 @@ int main()
         return 1;
     }
 
-    SDL_Window *window = SDL_CreateWindow("SDL_movie Example", 800, 600, 0);
+    SDL_Window *window = SDL_CreateWindow("Gleed Example", 800, 600, 0);
 
     if (!window)
     {
@@ -47,16 +47,16 @@ int main()
 
         This will parse the WebM file, and pre-select first available video and audio tracks.
     */
-    SDL_Movie *movie = SDLMovie_Open("bunny.webm");
+    GleedMovie *movie = GleedOpen("bunny.webm");
 
     if (!movie)
     {
-        /* Any SDL_Movie error can be retrieved with SDLMovie_GetError() */
-        std::cerr << SDLMovie_GetError() << std::endl;
+        /* Any GleedMovie error can be retrieved with GleedGetError() */
+        std::cerr << GleedGetError() << std::endl;
         return 1;
     }
 
-    const SDL_AudioSpec *movie_audio_spec = SDLMovie_GetAudioSpec(movie);
+    const SDL_AudioSpec *movie_audio_spec = GleedGetAudioSpec(movie);
 
     /*
         Here we open an audio stream and device, matching the audio spec of the movie.
@@ -81,7 +81,7 @@ int main()
 
         Note that it's users responsibility to destroy the texture when it's no longer needed.
     */
-    SDL_Texture *movieFrameTexture = SDLMovie_CreatePlaybackTexture(
+    SDL_Texture *movieFrameTexture = GleedCreatePlaybackTexture(
         movie,
         renderer);
 
@@ -101,41 +101,41 @@ int main()
                 if (ev.key.key == SDLK_0)
                 {
                     /* Seek to start */
-                    SDLMovie_SeekFrame(movie, 0);
+                    GleedSeekFrame(movie, 0);
                 }
             }
         }
 
         /* Video decoding*/
-        if (SDLMovie_HasNextVideoFrame(movie))
+        if (GleedHasNextVideoFrame(movie))
         {
             /* Decode current frame */
-            if (!SDLMovie_DecodeVideoFrame(movie))
+            if (!GleedDecodeVideoFrame(movie))
             {
-                std::cerr << "Failed to decode next frame: " << SDLMovie_GetError() << std::endl;
+                std::cerr << "Failed to decode next frame: " << GleedGetError() << std::endl;
                 return 1;
             }
 
-            printf("Frame %d decoded in %d ms\n", SDLMovie_GetCurrentFrame(movie), SDLMovie_GetLastFrameDecodeTime(movie));
+            printf("Frame %d decoded in %d ms\n", GleedGetCurrentFrame(movie), GleedGetLastFrameDecodeTime(movie));
 
             /* Update playback texture */
-            if (!SDLMovie_UpdatePlaybackTexture(movie, movieFrameTexture))
+            if (!GleedUpdatePlaybackTexture(movie, movieFrameTexture))
             {
-                std::cerr << "Failed to update playback texture: " << SDLMovie_GetError() << std::endl;
+                std::cerr << "Failed to update playback texture: " << GleedGetError() << std::endl;
                 return 1;
             }
 
             /* Advance to next frame */
-            SDLMovie_NextVideoFrame(movie);
+            GleedNextVideoFrame(movie);
         }
 
         /* Audio decoding */
-        if (SDLMovie_HasNextAudioFrame(movie))
+        if (GleedHasNextAudioFrame(movie))
         {
             /* Decode current audio frame*/
-            if (!SDLMovie_DecodeAudioFrame(movie))
+            if (!GleedDecodeAudioFrame(movie))
             {
-                std::cerr << "Failed to decode next audio frame: " << SDLMovie_GetError() << std::endl;
+                std::cerr << "Failed to decode next audio frame: " << GleedGetError() << std::endl;
                 return 1;
             }
 
@@ -145,7 +145,7 @@ int main()
             /*
                 Obtain audio samples from the movie and send them to audio stream.
             */
-            const SDL_MovieAudioSample *samples = SDLMovie_GetAudioSamples(movie, &sz, &samples_count);
+            const GleedMovieAudioSample *samples = GleedGetAudioSamples(movie, &sz, &samples_count);
 
             if (samples)
             {
@@ -153,7 +153,7 @@ int main()
             }
 
             /* Advance to next audio frame */
-            SDLMovie_NextAudioFrame(movie);
+            GleedNextAudioFrame(movie);
         }
 
         SDL_RenderClear(renderer);
@@ -165,7 +165,7 @@ int main()
     }
 
     /* Don't forget to free movie resources after finishing playback */
-    SDLMovie_FreeMovie(movie, true);
+    GleedFreeMovie(movie, true);
     SDL_DestroyTexture(movieFrameTexture);
     SDL_DestroyRenderer(renderer);
     SDL_FlushAudioStream(audio_stream);

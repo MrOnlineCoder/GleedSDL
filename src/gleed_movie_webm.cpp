@@ -1,4 +1,4 @@
-#include "SDL_movie_internal.h"
+#include "gleed_movie_internal.h"
 
 #include <webm/webm_parser.h>
 #include <webm/callback.h>
@@ -89,10 +89,10 @@ private:
     std::uint64_t m_position;
 };
 
-class SDLMovieWebmCallback : public webm::Callback
+class GleedMovieWebmCallback : public webm::Callback
 {
 public:
-    SDLMovieWebmCallback(SDL_Movie *movie)
+    GleedMovieWebmCallback(GleedMovie *movie)
     {
         m_movie = movie;
     }
@@ -131,7 +131,7 @@ public:
 
         m_isInKeyFrameBlock = simple_block.is_key_frame;
 
-        m_currentBlockTrack = SDLMovie_FindTrackByNumber(m_movie, simple_block.track_number);
+        m_currentBlockTrack = GleedFindTrackByNumber(m_movie, simple_block.track_number);
         m_currentBlockTimecode = simple_block.timecode;
         *action = m_currentBlockTrack >= 0 ? webm::Action::kRead : webm::Action::kSkip;
         return webm::Status(webm::Status::kOkCompleted);
@@ -159,7 +159,7 @@ public:
             return webm::Status(webm::Status::kOkCompleted);
         }
 
-        m_currentBlockTrack = SDLMovie_FindTrackByNumber(m_movie, block.track_number);
+        m_currentBlockTrack = GleedFindTrackByNumber(m_movie, block.track_number);
         m_currentBlockTimecode = block.timecode;
         *action = m_currentBlockTrack >= 0 ? webm::Action::kRead : webm::Action::kSkip;
         return webm::Status(webm::Status::kOkCompleted);
@@ -171,7 +171,7 @@ public:
         if (m_currentBlockTrack != -1)
         {
             const auto resultingTimecode = m_currentClusterTimecode + m_currentBlockTimecode;
-            SDLMovie_AddCachedFrame(
+            GleedAddCachedFrame(
                 m_movie,
                 m_currentBlockTrack, resultingTimecode, metadata.position, metadata.size, m_isInKeyFrameBlock);
         }
@@ -187,7 +187,7 @@ public:
             return webm::Status(webm::Status::kOkCompleted);
         }
 
-        if (m_movie->ntracks >= MAX_SDL_MOVIE_TRACKS)
+        if (m_movie->ntracks >= MAX_GLEED_TRACKS)
         {
             return webm::Status(webm::Status::kOkCompleted);
         }
@@ -210,7 +210,7 @@ public:
             return webm::Status(webm::Status::kOkCompleted);
         }
 
-        SDL_MovieTrack *mt = &m_movie->tracks[m_movie->ntracks];
+        GleedMovieTrack *mt = &m_movie->tracks[m_movie->ntracks];
 
         m_movie->ntracks++;
 
@@ -236,18 +236,18 @@ public:
 
         mt->track_number = track_entry.track_number.value();
 
-        mt->type = trackType == webm::TrackType::kVideo ? SDL_MOVIE_TRACK_TYPE_VIDEO : SDL_MOVIE_TRACK_TYPE_AUDIO;
+        mt->type = trackType == webm::TrackType::kVideo ? GLEED_TRACK_TYPE_VIDEO : GLEED_TRACK_TYPE_AUDIO;
 
         mt->lacing = track_entry.uses_lacing.value();
 
-        if (mt->type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+        if (mt->type == GLEED_TRACK_TYPE_VIDEO)
         {
             const auto &video = track_entry.video.value();
             mt->video_width = video.pixel_width.value();
             mt->video_height = video.pixel_height.value();
             mt->video_frame_rate = video.frame_rate.value();
         }
-        else if (mt->type == SDL_MOVIE_TRACK_TYPE_AUDIO)
+        else if (mt->type == GLEED_TRACK_TYPE_AUDIO)
         {
             const auto &audio = track_entry.audio.value();
             mt->audio_sample_frequency = audio.sampling_frequency.value();
@@ -283,7 +283,7 @@ public:
     }
 
 private:
-    SDL_Movie *m_movie;
+    GleedMovie *m_movie;
 
     int m_currentBlockTrack;
     bool m_isInKeyFrameBlock;
@@ -293,10 +293,10 @@ private:
 
 extern "C"
 {
-    bool SDLMovie_Parse_WebM(SDL_Movie *movie)
+    bool GleedParseWebM(GleedMovie *movie)
     {
         SDLWebmIoReader reader(movie->io);
-        SDLMovieWebmCallback callback(movie);
+        GleedMovieWebmCallback callback(movie);
 
         webm::WebmParser parser;
 
@@ -304,7 +304,7 @@ extern "C"
 
         if (!result.completed_ok() && result.code != kWebmReaderEof)
         {
-            SDLMovie_SetError("Failed to parse webm file, result code: %d", result.code);
+            GleedSetError("Failed to parse webm file, result code: %d", result.code);
             return false;
         }
 

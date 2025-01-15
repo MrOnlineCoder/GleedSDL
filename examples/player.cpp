@@ -1,5 +1,5 @@
 /*
-    SDL_Movie Example
+    GleedMovie Example
 
     It plays a classical Big Buck Bunny trailer in WebM format (bunny.webm)
 
@@ -10,7 +10,7 @@
 #include <fstream>
 #include <SDL3/SDL.h>
 
-#include <SDL_movie.h>
+#include <gleed.h>
 
 int main()
 {
@@ -68,18 +68,18 @@ int main()
 
         This will parse the WebM file, and pre-select first available video and audio tracks.
     */
-    SDL_Movie *movie = SDLMovie_Open(file_to_play);
+    GleedMovie *movie = GleedOpen(file_to_play);
 
     if (!movie)
     {
-        /* Any SDL_Movie error can be retrieved with SDLMovie_GetError() */
-        std::cerr << SDLMovie_GetError() << std::endl;
+        /* Any GleedMovie error can be retrieved with GleedGetError() */
+        std::cerr << GleedGetError() << std::endl;
         return 1;
     }
 
     int w, h;
 
-    SDLMovie_GetVideoSize(movie, &w, &h);
+    GleedGetVideoSize(movie, &w, &h);
 
     /*
         Resize the window to the video size, but not larger than 1920x1080
@@ -114,7 +114,7 @@ int main()
     /*
         Create a player instance from a movie
     */
-    SDL_MoviePlayer *player = SDLMovie_CreatePlayer(movie);
+    GleedMoviePlayer *player = GleedCreatePlayer(movie);
 
     /*
         Set the audio output device for the player
@@ -122,21 +122,21 @@ int main()
         This will automatically bind the audio stream to the device
         and player will put audio samples during update
     */
-    SDLMovie_SetPlayerAudioOutput(player, audio_device);
+    GleedSetPlayerAudioOutput(player, audio_device);
 
     /*
         For a better user experience, we will preload the audio stream
     */
-    SDLMovie_PreloadAudioStream(movie);
+    GleedPreloadAudioStream(movie);
 
     /*
         This texture will hold our video frame data
 
         You can pass your own texture, but it must have same format and it's recommended to use a streaming texture
     */
-    SDL_Texture *video_frame = SDLMovie_CreatePlaybackTexture(
+    SDL_Texture *video_frame = GleedCreatePlaybackTexture(
         movie, renderer);
-    SDLMovie_SetPlayerVideoOutputTexture(player, video_frame);
+    GleedSetPlayerVideoOutputTexture(player, video_frame);
 
     bool running = true;
 
@@ -158,10 +158,10 @@ int main()
                 if (ev.key.key == SDLK_SPACE)
                 {
                     /* Very simple pausing control */
-                    if (SDLMovie_IsPlayerPaused(player))
-                        SDLMovie_ResumePlayer(player);
+                    if (GleedIsPlayerPaused(player))
+                        GleedResumePlayer(player);
                     else
-                        SDLMovie_PausePlayer(player);
+                        GleedPausePlayer(player);
                 }
             }
         }
@@ -171,23 +171,23 @@ int main()
 
             Second argument expects a delta time, but here we let player decide it
         */
-        SDL_MoviePlayerUpdateResult upd = SDLMovie_UpdatePlayer(player, SDL_MOVIE_PLAYER_TIME_DELTA_AUTO);
+        GleedMoviePlayerUpdateResult upd = GleedUpdatePlayer(player, GLEED_PLAYER_TIME_DELTA_AUTO);
 
         /*
             Crash on error
         */
-        if (upd == SDL_MOVIE_PLAYER_UPDATE_ERROR)
+        if (upd == GLEED_PLAYER_UPDATE_ERROR)
         {
-            std::cerr << "Error updating player: " << SDLMovie_GetError() << std::endl;
+            std::cerr << "Error updating player: " << GleedGetError() << std::endl;
             break;
         }
 
         /*
             Exit when movie is finished
         */
-        if (SDLMovie_HasPlayerFinished(player))
+        if (GleedHasPlayerFinished(player))
         {
-            printf("Move finished, duration = %.2f seconds\n", SDLMovie_GetPlayerCurrentTimeSeconds(player));
+            printf("Move finished, duration = %.2f seconds\n", GleedGetPlayerCurrentTimeSeconds(player));
             running = false;
         }
 
@@ -203,9 +203,9 @@ int main()
         /*
             Some debug info in the window title
         */
-        snprintf(title, 128, "SDL_movie Player (movie %s, time %.2f)",
+        snprintf(title, 128, "GleedPlayer (movie %s, time %.2f)",
                  file_to_play,
-                 SDLMovie_GetPlayerCurrentTimeSeconds(player));
+                 GleedGetPlayerCurrentTimeSeconds(player));
 
         SDL_SetWindowTitle(window, title);
 
@@ -213,8 +213,8 @@ int main()
     }
 
     /* Don't forget to free movie resources after finishing playback */
-    SDLMovie_FreePlayer(player);
-    SDLMovie_FreeMovie(movie, true);
+    GleedFreePlayer(player);
+    GleedFreeMovie(movie, true);
 
     SDL_DestroyTexture(video_frame);
     SDL_CloseAudioDevice(audio_device);

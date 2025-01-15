@@ -12,7 +12,7 @@ set(CMAKE_BUILD_TYPE Debug)
 set(MAJOR_VERSION 1)
 set(MINOR_VERSION 0)
 set(MICRO_VERSION 0)
-project(SDL3_movie
+project(Gleed
     LANGUAGES C CXX
     VERSION "${MAJOR_VERSION}.${MINOR_VERSION}.${MICRO_VERSION}"
 )
@@ -70,28 +70,28 @@ FetchContent_MakeAvailable(libopus)
 include(libvpx.cmake)
 
 set(LIB_SOURCES 
-    src/SDL_movie_webm.cpp
-    src/SDL_movie_vpx.c
-    src/SDL_movie.c
-    src/SDL_movie_vorbis.c
-    src/SDL_movie_player.c
-    src/SDL_movie_opus.c
+    src/gleed_movie_webm.cpp
+    src/gleed_movie_vpx.c
+    src/gleed_movie.c
+    src/gleed_movie_vorbis.c
+    src/gleed_movie_player.c
+    src/gleed_movie_opus.c
 )
 
 # TODO: add shared library support
 add_library(
-        SDL_movie
+        Gleed
         STATIC
         ${LIB_SOURCES}
 )
 
-target_link_libraries(SDL_movie PUBLIC SDL3::SDL3 webm libvpx vorbis opus)
-target_include_directories(SDL_movie PRIVATE ${libwebm_SOURCE_DIR}/webm_parser/include)
+target_link_libraries(Gleed PUBLIC SDL3::SDL3 webm libvpx vorbis opus)
+target_include_directories(Gleed PRIVATE ${libwebm_SOURCE_DIR}/webm_parser/include)
 
-target_include_directories(SDL_movie PUBLIC include/)
+target_include_directories(Gleed PUBLIC include/)
 
-option(SDL_MOVIE_BUILD_EXAMPLES "Build SDL_Movie examples" ON)
+option(GLEED_BUILD_EXAMPLES "Build Gleed examples" ON)
 
-if (SDL_MOVIE_BUILD_EXAMPLES)
+if (GLEED_BUILD_EXAMPLES)
     add_subdirectory(examples/)
 endif()

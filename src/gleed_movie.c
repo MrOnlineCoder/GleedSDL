@@ -1,9 +1,8 @@
-#include <SDL_movie.h>
-#include "SDL_movie_internal.h"
+#include "gleed_movie_internal.h"
 
-static char sdl_movie_error[1024] = {0};
+static char gleed_movie_error[1024] = {0};
 
-static int SDLMovie_CachedFrameComparator(const void *a, const void *b)
+static int GleedCachedFrameComparator(const void *a, const void *b)
 {
     const CachedMovieFrame *frame_a = (const CachedMovieFrame *)a;
     const CachedMovieFrame *frame_b = (const CachedMovieFrame *)b;
@@ -11,53 +10,53 @@ static int SDLMovie_CachedFrameComparator(const void *a, const void *b)
     return frame_a->timecode - frame_b->timecode;
 }
 
-bool SDLMovie_SetError(const char *fmt, ...)
+bool GleedSetError(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    SDL_vsnprintf(sdl_movie_error, sizeof(sdl_movie_error), fmt, ap);
+    SDL_vsnprintf(gleed_movie_error, sizeof(gleed_movie_error), fmt, ap);
     va_end(ap);
 
     return false;
 }
 
-const char *SDLMovie_GetError()
+const char *GleedGetError()
 {
-    return sdl_movie_error;
+    return gleed_movie_error;
 }
 
-SDL_Movie *SDLMovie_Open(const char *file)
+GleedMovie *GleedOpen(const char *file)
 {
     SDL_IOStream *stream = SDL_IOFromFile(file, "rb");
 
     if (!stream)
     {
-        SDLMovie_SetError("Failed to open movie file %s:", SDL_GetError());
+        GleedSetError("Failed to open movie file %s:", SDL_GetError());
         return NULL;
     }
 
-    return SDLMovie_OpenIO(stream);
+    return GleedOpenIO(stream);
 }
 
-SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
+GleedMovie *GleedOpenIO(SDL_IOStream *io)
 {
     if (!io)
     {
         return NULL;
     }
 
-    SDL_Movie *movie = SDL_calloc(1, sizeof(SDL_Movie));
+    GleedMovie *movie = SDL_calloc(1, sizeof(GleedMovie));
     if (!movie)
     {
-        SDLMovie_SetError("Failed to allocate memory for movie");
+        GleedSetError("Failed to allocate memory for movie");
         return NULL;
     }
 
     movie->io = io;
-    movie->current_audio_track = SDL_MOVIE_NO_TRACK;
-    movie->current_video_track = SDL_MOVIE_NO_TRACK;
+    movie->current_audio_track = GLEED_NO_TRACK;
+    movie->current_video_track = GLEED_NO_TRACK;
 
-    if (!SDLMovie_Parse_WebM(movie))
+    if (!GleedParseWebM(movie))
     {
         SDL_free(movie);
         return NULL;
@@ -68,25 +67,25 @@ SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io)
     {
         for (int i = 0; i < movie->ntracks; i++)
         {
-            SDL_MovieTrack *tr = &movie->tracks[i];
-            if (tr->type == SDL_MOVIE_TRACK_TYPE_VIDEO && movie->current_video_track == SDL_MOVIE_NO_TRACK)
+            GleedMovieTrack *tr = &movie->tracks[i];
+            if (tr->type == GLEED_TRACK_TYPE_VIDEO && movie->current_video_track == GLEED_NO_TRACK)
             {
-                SDLMovie_SelectTrack(movie, SDL_MOVIE_TRACK_TYPE_VIDEO, i);
+                GleedSelectTrack(movie, GLEED_TRACK_TYPE_VIDEO, i);
             }
-            else if (tr->type == SDL_MOVIE_TRACK_TYPE_AUDIO && movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+            else if (tr->type == GLEED_TRACK_TYPE_AUDIO && movie->current_audio_track == GLEED_NO_TRACK)
             {
-                SDLMovie_SelectTrack(movie, SDL_MOVIE_TRACK_TYPE_AUDIO, i);
+                GleedSelectTrack(movie, GLEED_TRACK_TYPE_AUDIO, i);
             }
 
             /* Important step to ensure we have frames ordered chronologically, by timecode */
-            SDL_qsort(movie->cached_frames[i], movie->count_cached_frames[i], sizeof(CachedMovieFrame), SDLMovie_CachedFrameComparator);
+            SDL_qsort(movie->cached_frames[i], movie->count_cached_frames[i], sizeof(CachedMovieFrame), GleedCachedFrameComparator);
         }
     }
 
     return movie;
 }
 
-void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio)
+void GleedFreeMovie(GleedMovie *movie, bool closeio)
 {
     if (!movie)
         return;
@@ -126,8 +125,8 @@ void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio)
         SDL_free(movie->encoded_audio_buffer);
     }
 
-    SDLMovie_Close_Vorbis(movie);
-    SDLMovie_Close_VPX(movie);
+    GleedCloseVorbis(movie);
+    GleedCloseVPX(movie);
 
     if (closeio)
     {
@@ -137,11 +136,11 @@ void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio)
     SDL_free(movie);
 }
 
-SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *renderer)
+SDL_Texture *GleedCreatePlaybackTexture(GleedMovie *movie, SDL_Renderer *renderer)
 {
     if (!movie || !renderer)
     {
-        SDLMovie_SetError("movie and renderer cannot be NULL");
+        GleedSetError("movie and renderer cannot be NULL");
         return NULL;
     }
 
@@ -149,26 +148,26 @@ SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *rend
         renderer,
         SDL_PIXELFORMAT_RGB24,
         SDL_TEXTUREACCESS_STREAMING, /*The texture contents will be updated frequently*/
-        SDLMovie_GetVideoTrack(movie)->video_width,
-        SDLMovie_GetVideoTrack(movie)->video_height);
+        GleedGetVideoTrack(movie)->video_width,
+        GleedGetVideoTrack(movie)->video_height);
 
     if (!texture)
     {
-        SDLMovie_SetError("Failed to create playback texture: %s", SDL_GetError());
+        GleedSetError("Failed to create playback texture: %s", SDL_GetError());
         return NULL;
     }
 
     return texture;
 }
 
-void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size, bool key_frame)
+void GleedAddCachedFrame(GleedMovie *movie, Uint32 track, Uint64 timecode, Uint32 offset, Uint32 size, bool key_frame)
 {
     if (!movie)
         return;
 
     if (movie->ntracks <= track)
         return;
-    if (track >= MAX_SDL_MOVIE_TRACKS)
+    if (track >= MAX_GLEED_TRACKS)
         return;
 
     if (movie->count_cached_frames[track] >= movie->capacity_cached_frames[track])
@@ -182,7 +181,7 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
     CachedMovieFrame *frame = &movie->cached_frames[track][new_frame_index];
 
     /* Up to discussion if this is correct*/
-    const Sint64 final_timecode = timecode - SDLMovie_MatroskaTicksToMilliseconds(movie, movie->tracks[track].codec_delay);
+    const Sint64 final_timecode = timecode - GleedMatroskaTicksToMilliseconds(movie, movie->tracks[track].codec_delay);
 
     if (final_timecode < 0)
     {
@@ -214,7 +213,7 @@ void SDLMovie_AddCachedFrame(SDL_Movie *movie, Uint32 track, Uint64 timecode, Ui
     movie->tracks[track].total_bytes += size;
 }
 
-int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint32 track_number)
+int GleedFindTrackByNumber(GleedMovie *movie, Uint32 track_number)
 {
     for (int i = 0; i < movie->ntracks; i++)
     {
@@ -226,41 +225,41 @@ int SDLMovie_FindTrackByNumber(SDL_Movie *movie, Uint32 track_number)
     return -1;
 }
 
-bool SDLMovie_CanPlaybackVideo(SDL_Movie *movie)
+bool GleedCanPlaybackVideo(GleedMovie *movie)
 {
-    return movie && movie->ntracks > 0 && movie->total_frames > 0 && movie->current_video_track != SDL_MOVIE_NO_TRACK;
+    return movie && movie->ntracks > 0 && movie->total_frames > 0 && movie->current_video_track != GLEED_NO_TRACK;
 }
 
-bool SDLMovie_CanPlaybackAudio(SDL_Movie *movie)
+bool GleedCanPlaybackAudio(GleedMovie *movie)
 {
-    return movie && movie->ntracks > 0 && movie->total_audio_frames > 0 && movie->current_audio_track != SDL_MOVIE_NO_TRACK;
+    return movie && movie->ntracks > 0 && movie->total_audio_frames > 0 && movie->current_audio_track != GLEED_NO_TRACK;
 }
 
-static SDL_MovieCodecType SDLMovie_GetTrackCodec(SDL_MovieTrack *track)
+static GleedMovieCodecType GleedGetTrackCodec(GleedMovieTrack *track)
 {
     if (SDL_strncmp(track->codec_id, "V_VP8", 32) == 0)
     {
-        return SDL_MOVIE_CODEC_TYPE_VP8;
+        return GLEED_CODEC_TYPE_VP8;
     }
     else if (SDL_strncmp(track->codec_id, "V_VP9", 32) == 0)
     {
-        return SDL_MOVIE_CODEC_TYPE_VP9;
+        return GLEED_CODEC_TYPE_VP9;
     }
     else if (SDL_strncmp(track->codec_id, "A_VORBIS", 32) == 0)
     {
-        return SDL_MOVIE_CODEC_TYPE_VORBIS;
+        return GLEED_CODEC_TYPE_VORBIS;
     }
     else if (SDL_strncmp(track->codec_id, "A_OPUS", 32) == 0)
     {
-        return SDL_MOVIE_CODEC_TYPE_OPUS;
+        return GLEED_CODEC_TYPE_OPUS;
     }
     else
     {
-        return SDL_MOVIE_CODEC_TYPE_UNKNOWN;
+        return GLEED_CODEC_TYPE_UNKNOWN;
     }
 }
 
-void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
+void GleedSelectTrack(GleedMovie *movie, GleedMovieTrackType type, int track)
 {
     if (!movie)
         return;
@@ -273,13 +272,13 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
     if (movie->tracks[track].type != type)
         return;
 
-    if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+    if (type == GLEED_TRACK_TYPE_VIDEO)
     {
         movie->current_video_track = track;
 
-        SDL_MovieTrack *new_video_track = SDLMovie_GetVideoTrack(movie);
+        GleedMovieTrack *new_video_track = GleedGetVideoTrack(movie);
 
-        movie->video_codec = SDLMovie_GetTrackCodec(new_video_track);
+        movie->video_codec = GleedGetTrackCodec(new_video_track);
         movie->total_frames = new_video_track->total_frames;
 
         if (movie->current_frame_surface)
@@ -292,12 +291,12 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
             new_video_track->video_height,
             SDL_PIXELFORMAT_RGB24);
     }
-    else if (type == SDL_MOVIE_TRACK_TYPE_AUDIO)
+    else if (type == GLEED_TRACK_TYPE_AUDIO)
     {
         movie->current_audio_track = track;
 
-        SDL_MovieTrack *new_audio_track = SDLMovie_GetAudioTrack(movie);
-        movie->audio_codec = SDLMovie_GetTrackCodec(new_audio_track);
+        GleedMovieTrack *new_audio_track = GleedGetAudioTrack(movie);
+        movie->audio_codec = GleedGetTrackCodec(new_audio_track);
         movie->total_audio_frames = new_audio_track->total_frames;
         movie->audio_spec.channels = new_audio_track->audio_channels;
         movie->audio_spec.freq = new_audio_track->audio_sample_frequency;
@@ -305,14 +304,14 @@ void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track)
     }
 }
 
-SDL_MovieTrack *SDLMovie_GetVideoTrack(SDL_Movie *movie)
+GleedMovieTrack *GleedGetVideoTrack(GleedMovie *movie)
 {
     if (!movie)
         return NULL;
 
     return &movie->tracks[movie->current_video_track];
 }
-SDL_MovieTrack *SDLMovie_GetAudioTrack(SDL_Movie *movie)
+GleedMovieTrack *GleedGetAudioTrack(GleedMovie *movie)
 {
     if (!movie)
         return NULL;
@@ -320,54 +319,54 @@ SDL_MovieTrack *SDLMovie_GetAudioTrack(SDL_Movie *movie)
     return &movie->tracks[movie->current_audio_track];
 }
 
-bool SDLMovie_HasNextVideoFrame(SDL_Movie *movie)
+bool GleedHasNextVideoFrame(GleedMovie *movie)
 {
-    return movie && SDLMovie_CanPlaybackVideo(movie) && movie->current_frame < movie->total_frames;
+    return movie && GleedCanPlaybackVideo(movie) && movie->current_frame < movie->total_frames;
 }
 
-bool SDLMovie_DecodeVideoFrame(SDL_Movie *movie)
+bool GleedDecodeVideoFrame(GleedMovie *movie)
 {
     if (!movie)
         return false;
 
-    if (!SDLMovie_CanPlaybackVideo(movie))
+    if (!GleedCanPlaybackVideo(movie))
     {
-        SDLMovie_SetError("No tracks or playback data available");
+        GleedSetError("No tracks or playback data available");
         return false;
     }
 
-    SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
+    GleedMovieTrack *video_track = GleedGetVideoTrack(movie);
 
-    SDLMovie_ReadCurrentFrame(movie, SDL_MOVIE_TRACK_TYPE_VIDEO);
+    GleedReadCurrentFrame(movie, GLEED_TRACK_TYPE_VIDEO);
 
-    if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP8 || movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP9)
+    if (movie->video_codec == GLEED_CODEC_TYPE_VP8 || movie->video_codec == GLEED_CODEC_TYPE_VP9)
     {
-        return SDLMovie_Decode_VPX(movie);
+        return GleedDecodeVPX(movie);
     }
 
-    SDLMovie_SetError("Unsupported video codec, frame not decoded");
+    GleedSetError("Unsupported video codec, frame not decoded");
 
     return false;
 }
 
-bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture)
+bool GleedUpdatePlaybackTexture(GleedMovie *movie, SDL_Texture *texture)
 {
     if (!movie || !texture)
     {
-        SDLMovie_SetError("movie and texture cannot be NULL");
+        GleedSetError("movie and texture cannot be NULL");
         return false;
     }
 
     if (!movie->current_frame_surface)
     {
-        SDLMovie_SetError("No frame available, you must decode a frame first");
+        GleedSetError("No frame available, you must decode a frame first");
         return false;
     }
 
     if (texture->format != movie->current_frame_surface->format)
     {
-        SDLMovie_SetError("Texture format does not match video frame format, provided = %d, required = %d",
-                          texture->format, movie->current_frame_surface->format);
+        GleedSetError("Texture format does not match video frame format, provided = %d, required = %d",
+                      texture->format, movie->current_frame_surface->format);
         return false;
     }
 
@@ -379,19 +378,19 @@ bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture)
     return true;
 }
 
-void SDLMovie_ReadCurrentFrame(SDL_Movie *movie, SDL_MovieTrackType type)
+void GleedReadCurrentFrame(GleedMovie *movie, GleedMovieTrackType type)
 {
     if (!movie)
         return;
 
-    int target_track_index = type == SDL_MOVIE_TRACK_TYPE_VIDEO ? movie->current_video_track : movie->current_audio_track;
+    int target_track_index = type == GLEED_TRACK_TYPE_VIDEO ? movie->current_video_track : movie->current_audio_track;
 
-    if (target_track_index == SDL_MOVIE_NO_TRACK)
+    if (target_track_index == GLEED_NO_TRACK)
     {
         return;
     }
 
-    if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+    if (type == GLEED_TRACK_TYPE_VIDEO)
     {
         CachedMovieFrame *frame = &movie->cached_frames[target_track_index][movie->current_frame];
 
@@ -432,35 +431,35 @@ void SDLMovie_ReadCurrentFrame(SDL_Movie *movie, SDL_MovieTrackType type)
     }
 }
 
-Uint32 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie)
+Uint32 GleedGetLastFrameDecodeTime(GleedMovie *movie)
 {
     if (!movie)
         return 0;
     return movie->last_frame_decode_ms;
 }
 
-Uint32 SDLMovie_GetTotalVideoFrames(SDL_Movie *movie)
+Uint32 GleedGetTotalVideoFrames(GleedMovie *movie)
 {
     if (!movie)
         return 0;
     return movie->total_frames;
 }
 
-Uint32 SDLMovie_GetCurrentFrame(SDL_Movie *movie)
+Uint32 GleedGetCurrentFrame(GleedMovie *movie)
 {
     if (!movie)
         return 0;
     return movie->current_frame;
 }
 
-void SDLMovie_NextVideoFrame(SDL_Movie *movie)
+void GleedNextVideoFrame(GleedMovie *movie)
 {
     if (!movie)
         return;
 
-    if (!SDLMovie_CanPlaybackVideo(movie))
+    if (!GleedCanPlaybackVideo(movie))
     {
-        SDLMovie_SetError("No tracks or playback data available");
+        GleedSetError("No tracks or playback data available");
         return;
     }
 
@@ -470,15 +469,15 @@ void SDLMovie_NextVideoFrame(SDL_Movie *movie)
     }
 }
 
-void SDLMovie_GetVideoSize(SDL_Movie *movie, int *w, int *h)
+void GleedGetVideoSize(GleedMovie *movie, int *w, int *h)
 {
     if (!movie)
         return;
 
-    if (movie->current_video_track == SDL_MOVIE_NO_TRACK)
+    if (movie->current_video_track == GLEED_NO_TRACK)
         return;
 
-    SDL_MovieTrack *video_track = SDLMovie_GetVideoTrack(movie);
+    GleedMovieTrack *video_track = GleedGetVideoTrack(movie);
 
     if (w)
         *w = video_track->video_width;
@@ -486,7 +485,7 @@ void SDLMovie_GetVideoSize(SDL_Movie *movie, int *w, int *h)
         *h = video_track->video_height;
 }
 
-const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie)
+const SDL_Surface *GleedGetVideoFrameSurface(GleedMovie *movie)
 {
     if (!movie || !movie->current_frame_surface)
     {
@@ -496,7 +495,7 @@ const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie)
     return movie->current_frame_surface;
 }
 
-void SDLMovie_SeekFrame(SDL_Movie *movie, Uint32 frame)
+void GleedSeekFrame(GleedMovie *movie, Uint32 frame)
 {
     if (!movie)
         return;
@@ -507,9 +506,9 @@ void SDLMovie_SeekFrame(SDL_Movie *movie, Uint32 frame)
     movie->current_frame = frame;
 }
 
-bool SDLMovie_HasNextAudioFrame(SDL_Movie *movie)
+bool GleedHasNextAudioFrame(GleedMovie *movie)
 {
-    if (!movie || movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+    if (!movie || movie->current_audio_track == GLEED_NO_TRACK)
     {
         return false;
     }
@@ -517,32 +516,32 @@ bool SDLMovie_HasNextAudioFrame(SDL_Movie *movie)
     return movie->current_audio_frame < movie->total_audio_frames;
 }
 
-bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie)
+bool GleedDecodeAudioFrame(GleedMovie *movie)
 {
-    if (!movie || movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+    if (!movie || movie->current_audio_track == GLEED_NO_TRACK)
     {
         return false;
     }
 
-    SDLMovie_ReadCurrentFrame(movie, SDL_MOVIE_TRACK_TYPE_AUDIO);
+    GleedReadCurrentFrame(movie, GLEED_TRACK_TYPE_AUDIO);
 
-    if (movie->audio_codec == SDL_MOVIE_CODEC_TYPE_VORBIS)
+    if (movie->audio_codec == GLEED_CODEC_TYPE_VORBIS)
     {
-        VorbisDecodeResult res = SDLMovie_Decode_Vorbis(movie);
+        VorbisDecodeResult res = GleedDecode_Vorbis(movie);
 
-        return res == SDL_MOVIE_VORBIS_DECODE_DONE;
+        return res == GLEED_VORBIS_DECODE_DONE;
     }
-    else if (movie->audio_codec == SDL_MOVIE_CODEC_TYPE_OPUS)
+    else if (movie->audio_codec == GLEED_CODEC_TYPE_OPUS)
     {
-        return SDLMovie_DecodeOpus(movie);
+        return GleedDecodeOpus(movie);
     }
 
-    SDLMovie_SetError("Unsupported audio codec, frame not decoded");
+    GleedSetError("Unsupported audio codec, frame not decoded");
 
     return false;
 }
 
-const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *size, int *count)
+const GleedMovieAudioSample *GleedGetAudioSamples(GleedMovie *movie, size_t *size, int *count)
 {
     if (!movie || !movie->decoded_audio_frame)
     {
@@ -554,7 +553,7 @@ const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *s
     }
 
     if (size)
-        *size = movie->decoded_audio_samples * sizeof(SDL_MovieAudioSample) * movie->audio_spec.channels;
+        *size = movie->decoded_audio_samples * sizeof(GleedMovieAudioSample) * movie->audio_spec.channels;
 
     if (count)
         *count = movie->decoded_audio_samples;
@@ -562,14 +561,14 @@ const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *s
     return movie->decoded_audio_frame;
 }
 
-void SDLMovie_NextAudioFrame(SDL_Movie *movie)
+void GleedNextAudioFrame(GleedMovie *movie)
 {
     if (!movie)
         return;
 
-    if (!SDLMovie_CanPlaybackAudio(movie))
+    if (!GleedCanPlaybackAudio(movie))
     {
-        SDLMovie_SetError("No tracks or playback data available");
+        GleedSetError("No tracks or playback data available");
         return;
     }
 
@@ -579,28 +578,28 @@ void SDLMovie_NextAudioFrame(SDL_Movie *movie)
     }
 }
 
-const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie)
+const SDL_AudioSpec *GleedGetAudioSpec(GleedMovie *movie)
 {
     if (!movie)
         return NULL;
-    if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+    if (movie->current_audio_track == GLEED_NO_TRACK)
         return NULL;
     return &movie->audio_spec;
 }
 
-bool SDLMovie_PreloadAudioStream(SDL_Movie *movie)
+bool GleedPreloadAudioStream(GleedMovie *movie)
 {
     if (!movie)
     {
-        return SDLMovie_SetError("movie is NULL");
+        return GleedSetError("movie is NULL");
     }
 
-    if (movie->current_audio_track == SDL_MOVIE_NO_TRACK)
+    if (movie->current_audio_track == GLEED_NO_TRACK)
     {
-        return SDLMovie_SetError("No audio track selected for preload");
+        return GleedSetError("No audio track selected for preload");
     }
 
-    SDL_MovieTrack *audio_track = SDLMovie_GetAudioTrack(movie);
+    GleedMovieTrack *audio_track = GleedGetAudioTrack(movie);
 
     const Uint32 buffer_size = audio_track->total_bytes;
 
@@ -628,7 +627,7 @@ bool SDLMovie_PreloadAudioStream(SDL_Movie *movie)
     return true;
 }
 
-const SDL_MovieTrack *SDLMovie_GetTrack(const SDL_Movie *movie, int index)
+const GleedMovieTrack *GleedGetTrack(const GleedMovie *movie, int index)
 {
     if (!movie || index < 0 || index >= movie->ntracks)
     {
@@ -638,39 +637,39 @@ const SDL_MovieTrack *SDLMovie_GetTrack(const SDL_Movie *movie, int index)
     return &movie->tracks[index];
 }
 
-int SDLMovie_GetTrackCount(const SDL_Movie *movie)
+int GleedGetTrackCount(const GleedMovie *movie)
 {
     if (!movie)
         return 0;
     return movie->ntracks;
 }
 
-Uint64 SDLMovie_TimecodeToMilliseconds(SDL_Movie *movie, Uint64 timecode)
+Uint64 GleedTimecodeToMilliseconds(GleedMovie *movie, Uint64 timecode)
 {
     if (!movie)
         return 0;
     return timecode * movie->timecode_scale / 1000000;
 }
-Uint64 SDLMovie_MillisecondsToTimecode(SDL_Movie *movie, Uint64 ms)
+Uint64 GleedMillisecondsToTimecode(GleedMovie *movie, Uint64 ms)
 {
     if (!movie)
         return 0;
     return ms * 1000000 / movie->timecode_scale;
 }
 
-CachedMovieFrame *SDLMovie_GetCurrentCachedFrame(SDL_Movie *movie, SDL_MovieTrackType type)
+CachedMovieFrame *GleedGetCurrentCachedFrame(GleedMovie *movie, GleedMovieTrackType type)
 {
     if (!movie)
         return NULL;
 
-    int target_track_index = type == SDL_MOVIE_TRACK_TYPE_VIDEO ? movie->current_video_track : movie->current_audio_track;
+    int target_track_index = type == GLEED_TRACK_TYPE_VIDEO ? movie->current_video_track : movie->current_audio_track;
 
-    if (target_track_index == SDL_MOVIE_NO_TRACK)
+    if (target_track_index == GLEED_NO_TRACK)
     {
         return NULL;
     }
 
-    if (type == SDL_MOVIE_TRACK_TYPE_VIDEO)
+    if (type == GLEED_TRACK_TYPE_VIDEO)
     {
         return &movie->cached_frames[target_track_index][movie->current_frame];
     }
@@ -680,7 +679,7 @@ CachedMovieFrame *SDLMovie_GetCurrentCachedFrame(SDL_Movie *movie, SDL_MovieTrac
     }
 }
 
-Uint64 SDLMovie_MatroskaTicksToMilliseconds(SDL_Movie *movie, Uint64 ticks)
+Uint64 GleedMatroskaTicksToMilliseconds(GleedMovie *movie, Uint64 ticks)
 {
     /*Matroska ticks are nanoseconds, convert to ms*/
     return ticks / 1000000;

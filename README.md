@@ -1,10 +1,12 @@
-# SDL_movie
+# GleedSDL
 
 ![Screenshot of Bunny Demo](examples/bunny_screenshot.png)
 
 This is a simple library for playing **.webm** movies with SDL3. It is intended to be mostly used for playing short cinematics in games, but cautious usage for other purposes is also possible.
 
 ⚡️ Experimental until said elsewise. 😜
+
+Note: library was renamed from SDL_Movie to Gleed to avoid confusion with official SDL satellite libraries.
 
 ## Features
 
@@ -31,31 +33,31 @@ Note: you will need a C++ compiler to build this library, as `libwebm` parser is
 
 ## Usage
 
-See [basic.cpp](examples/basic.cpp) for a simple example playing Big Buck Bunny short trailer using more low-level `SDL_Movie` object.
+See [basic.cpp](examples/basic.cpp) for a simple example playing Big Buck Bunny short trailer using more low-level `GleedMovie` object.
 
-See another [player.cpp](examples/player.cpp) with more high-level `SDL_MoviePlayer` object, which handles all the timing and synchronization for you and is the **recommended way** to use the library, unless you have specific needs.
+See another [player.cpp](examples/player.cpp) with more high-level `GleedMoviePlayer` object, which handles all the timing and synchronization for you and is the **recommended way** to use the library, unless you have specific needs.
 It allows also selecting a movie out of different codec variants.
 
 The API is documented in the header file itself: [SDL_movie.h](include/SDL_movie.h).
 
-The general workflow for `SDL_Movie` is the following:
+The general workflow for `GleedMovie` is the following:
 
-1. Open a .webm file with `SDLMovie_Open(path)` or `SDLMovie_OpenIO(io_stream)`, obtaining a `SDLMovie*` handle.
-2. Optionally, select an audio or video track with `SDLMovie_SelectTrack`. If not called, the first video and audio tracks are selected by default.
-3. In the application loop, call `SDLMovie_DecodeVideoFrame` to decode video frame, and `SDLMovie_DecodeAudioFrame` to decode audio frame.
-4. On success, do useful rendering with video pixels (`SDLMovie_GetVideoFrameSurface`) and audio samples (`SDLMovie_GetAudioSamples`)
-5. Call `SDLMovie_NextVideoFrame` and `SDLMovie_NextAudioFrame` to advance to the next frame. Use `SDLMovie_HasNextVideoFrame` and `SDLMovie_HasNextAudioFrame` to check if there are more frames to decode.
-6. When done, call `SDLMovie_FreeMovie` to free resources.
+1. Open a .webm file with `GleedOpen(path)` or `GleedOpenIO(io_stream)`, obtaining a `GleedMovie*` handle.
+2. Optionally, select an audio or video track with `GleedSelectTrack`. If not called, the first video and audio tracks are selected by default.
+3. In the application loop, call `GleedDecodeVideoFrame` to decode video frame, and `GleedDecodeAudioFrame` to decode audio frame.
+4. On success, do useful rendering with video pixels (`GleedGetVideoFrameSurface`) and audio samples (`GleedGetAudioSamples`)
+5. Call `GleedNextVideoFrame` and `GleedNextAudioFrame` to advance to the next frame. Use `GleedHasNextVideoFrame` and `GleedHasNextAudioFrame` to check if there are more frames to decode.
+6. When done, call `GleedFreeMovie` to free resources.
 
 **However**, the main problem with that workflow is that it all timing and synchronization is left to the user. Doing the process above at a frame rate higher than the movie's original will cause inconsistent playback speed and audio desync.
 
-Therefore, it's advised to use `SDL_MoviePlayer`. Aside from handling timing for you, it also supports:
+Therefore, it's advised to use `GleedMoviePlayer`. Aside from handling timing for you, it also supports:
 
 - Directly feeding audio output to your SDL_AudioDevice.
 - Pausing
 - Disabling audio or video playback, if needed
 - Automatic frame rate adjustment
-- Automatic calculation of time delta (pass `SDL_MOVIE_PLAYER_TIME_DELTA_AUTO` as second argument to `SDLMovie_UpdatePlayer`)
+- Automatic calculation of time delta (pass `GLEED_PLAYER_TIME_DELTA_AUTO` as second argument to `GleedUpdatePlayer`)
 - _Probably will support seeking in future_
 
 Very quick example with the player (no error checking):
@@ -63,26 +65,26 @@ Very quick example with the player (no error checking):
 ```cpp
 // Initialization
 
-SDL_Movie* movie = SDLMovie_Open("bunny.webm");
+GleedMovie* movie = GleedOpen("bunny.webm");
 
-SDL_MoviePlayer* player = SDLMovie_CreatePlayer(movie);
+GleedMoviePlayer* player = GleedCreatePlayer(movie);
 
-SDL_Texture *video_frame = SDLMovie_CreatePlaybackTexture(
+SDL_Texture *video_frame = GleedCreatePlaybackTexture(
         movie, renderer);
 
-SDLMovie_SetPlayerVideoOutputTexture(player, video_frame);
-SDLMovie_SetPlayerAudioOutput(player, audio_device); // your SDL_AudioDevice, already opened
+GleedSetPlayerVideoOutputTexture(player, video_frame);
+GleedSetPlayerAudioOutput(player, audio_device); // your SDL_AudioDevice, already opened
 
 // Update loop
-SDLMovie_UpdatePlayer(player, SDL_MOVIE_PLAYER_TIME_DELTA_AUTO); //second argument is time delta, you can provide your own
+GleedUpdatePlayer(player, GLEED_PLAYER_TIME_DELTA_AUTO); //second argument is time delta, you can provide your own
 
 // Rendering
 SDL_RenderCopy(renderer, video_frame, NULL, NULL); // render video frame
 
 // Cleanup
-SDLMovie_FreePlayer(player);
-SDLMovie_FreeMovie(movie, true);
-SDLMovie_DestroyTexture(video_frame);
+GleedFreePlayer(player);
+GleedFreeMovie(movie, true);
+GleedDestroyTexture(video_frame);
 ```
 
 ## Why WebM?
@@ -96,7 +98,7 @@ I have 2 reasons for that:
 1. ffmpeg is _big_ and kinda-overkill when you have control over the input format for your video assets, allowing you to choose one.
 2. I wanted to learn how low-level codecs APIs and struggle a bit :D
 
-## How can I convert my video to WebM for SDL_Movie?
+## How can I convert my video to WebM for Gleed?
 
 Use `ffmpeg`:
 
@@ -122,7 +124,7 @@ For now, it does not support it, only accelerations available are implemented by
 
 This library uses quite a lot of dynamic memory allocations, but in general it should not have much impact on memory usage, as most allocations are for one-frame buffers.
 
-Although, as an option, you may explicitly call `SDLMovie_PreloadAudioStream` to preload whole audio track into memory for a smoother playback at a cost of longer loading time and higher memory usage.
+Although, as an option, you may explicitly call `GleedPreloadAudioStream` to preload whole audio track into memory for a smoother playback at a cost of longer loading time and higher memory usage.
 
 ## License
 

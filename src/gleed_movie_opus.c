@@ -1,4 +1,4 @@
-#include "SDL_movie_internal.h"
+#include "gleed_movie_internal.h"
 
 #include <opus.h>
 
@@ -10,7 +10,7 @@ typedef struct
     int pcm_buffer_size_per_channel;
 } MovieOpusContext;
 
-bool SDLMovie_DecodeOpus(SDL_Movie *movie)
+bool GleedDecodeOpus(GleedMovie *movie)
 {
     if (!movie->opus_context)
     {
@@ -26,7 +26,7 @@ bool SDLMovie_DecodeOpus(SDL_Movie *movie)
         {
             SDL_free(movie->opus_context);
             movie->opus_context = NULL;
-            return SDLMovie_SetError("Failed to initialize Opus decoder: %s", opus_strerror(decoderInitError));
+            return GleedSetError("Failed to initialize Opus decoder: %s", opus_strerror(decoderInitError));
         }
 
         /*
@@ -45,7 +45,7 @@ bool SDLMovie_DecodeOpus(SDL_Movie *movie)
 
     if (per_channel_samples_decoded < OPUS_OK)
     {
-        return SDLMovie_SetError("Failed to decode Opus frame: %s", opus_strerror(per_channel_samples_decoded));
+        return GleedSetError("Failed to decode Opus frame: %s", opus_strerror(per_channel_samples_decoded));
     }
 
     int samples_count = per_channel_samples_decoded * movie->audio_spec.channels;
@@ -57,7 +57,7 @@ bool SDLMovie_DecodeOpus(SDL_Movie *movie)
     */
     if (!movie->decoded_audio_frame || movie->decoded_audio_frame_size < ctx->pcm_buffer_size)
     {
-        movie->decoded_audio_frame = (SDL_MovieAudioSample *)SDL_realloc(movie->decoded_audio_frame, ctx->pcm_buffer_size);
+        movie->decoded_audio_frame = (GleedMovieAudioSample *)SDL_realloc(movie->decoded_audio_frame, ctx->pcm_buffer_size);
         movie->decoded_audio_frame_size = ctx->pcm_buffer_size;
     }
     else
@@ -77,7 +77,7 @@ bool SDLMovie_DecodeOpus(SDL_Movie *movie)
     return true;
 }
 
-void SDLMovie_CloseOpus(SDL_Movie *movie)
+void GleedCloseOpus(GleedMovie *movie)
 {
     if (movie->opus_context)
     {

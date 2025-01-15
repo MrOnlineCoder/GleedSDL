@@ -1,5 +1,5 @@
 /*
-    SDL_Movie library
+    GleedSDL library
     Version 1.0.0
 
     Copyright (c) 2024-2025 Nikita Kogut
@@ -24,8 +24,8 @@
 
 */
 
-#ifndef SDL_MOVIE_H
-#define SDL_MOVIE_H
+#ifndef GLEED_H
+#define GLEED_H
 
 #include <SDL3/SDL.h>
 
@@ -35,58 +35,58 @@ extern "C"
 #endif
 
 /* Library version, mimics SDL defines*/
-#define SDL_MOVIE_MAJOR_VERSION 1
-#define SDL_MOVIE_MINOR_VERSION 0
-#define SDL_MOVIE_MICRO_VERSION 0
+#define GLEED_MAJOR_VERSION 1
+#define GLEED_MOVIE_MINOR_VERSION 0
+#define GLEED_MOVIE_MICRO_VERSION 0
 
-#define SDL_MOVIE_VERSION \
+#define GLEED_VERSION \
     SDL_VERSIONNUM(SDL_IMAGE_MAJOR_VERSION, SDL_IMAGE_MINOR_VERSION, SDL_IMAGE_MICRO_VERSION)
 
 /**
- * Maximum number of tracks in a single movie that SDL_Movie can load
+ * Maximum number of tracks in a single movie that GleedMovie can load
  */
-#define MAX_SDL_MOVIE_TRACKS 8
+#define MAX_GLEED_TRACKS 8
 
 /**
  * Constant to represent no track number
  */
-#define SDL_MOVIE_NO_TRACK -1
+#define GLEED_NO_TRACK -1
 
     /**
      * Movie track type
      */
     typedef enum
     {
-        SDL_MOVIE_TRACK_TYPE_UNKNOWN = 0, /**< Unknown track, should not be used */
-        SDL_MOVIE_TRACK_TYPE_VIDEO = 1,   /**< Video track */
-        SDL_MOVIE_TRACK_TYPE_AUDIO = 2,   /**< Audio track */
-    } SDL_MovieTrackType;
+        GLEED_TRACK_TYPE_UNKNOWN = 0, /**< Unknown track, should not be used */
+        GLEED_TRACK_TYPE_VIDEO = 1,   /**< Video track */
+        GLEED_TRACK_TYPE_AUDIO = 2,   /**< Audio track */
+    } GleedMovieTrackType;
 
     /**
      * Movie codec type
      */
     typedef enum
     {
-        SDL_MOVIE_CODEC_TYPE_UNKNOWN = 0, /**< Unknown codec, should not be used */
-        SDL_MOVIE_CODEC_TYPE_VP8 = 1,     /**< VP8 video codec */
-        SDL_MOVIE_CODEC_TYPE_VP9 = 2,     /**< VP9 video codec */
-        SDL_MOVIE_CODEC_TYPE_VORBIS = 3,  /**< Vorbis audio codec */
-        SDL_MOVIE_CODEC_TYPE_OPUS = 4,    /**< Opus audio codec */
-    } SDL_MovieCodecType;
+        GLEED_CODEC_TYPE_UNKNOWN = 0, /**< Unknown codec, should not be used */
+        GLEED_CODEC_TYPE_VP8 = 1,     /**< VP8 video codec */
+        GLEED_CODEC_TYPE_VP9 = 2,     /**< VP9 video codec */
+        GLEED_CODEC_TYPE_VORBIS = 3,  /**< Vorbis audio codec */
+        GLEED_CODEC_TYPE_OPUS = 4,    /**< Opus audio codec */
+    } GleedMovieCodecType;
 
     /**
      * Movie structure
      *
      * Represents single opened and parsed .webm file.
      *
-     * Movie can be created via SDLMovie_Open or SDLMovie_OpenIO functions.
-     * It must be freed with SDLMovie_FreeMovie function after no longer needed.
+     * Movie can be created via GleedOpen or GleedOpenIO functions.
+     * It must be freed with GleedFreeMovie function after no longer needed.
      *
-     * SDL_Movie API allows loading WebM file and per-frame decoding, but nothing more.
+     * Gleed API allows loading WebM file and per-frame decoding, but nothing more.
      *
      * Opaque structure, do not modify its members directly.
      */
-    typedef struct SDL_Movie SDL_Movie;
+    typedef struct GleedMovie GleedMovie;
 
     /**
      * Movie track structure
@@ -95,7 +95,7 @@ extern "C"
      * each representing different stream of data (video, audio, subtitles, etc.).
      *
      * Tracks are built of individual frames, which can be decoded and rendered (or played back).
-     * Tracks can be selected for playback with SDLMovie_SelectTrack function.
+     * Tracks can be selected for playback with GleedSelectTrack function.
      *
      * This structure represents single track in the movie file.
      * Please note, video_ members are only valid for video tracks,
@@ -119,8 +119,8 @@ extern "C"
         Uint64 codec_delay;   /**< Codec delay, if available, in Matroska ticks */
         Uint64 seek_pre_roll; /**< Seek pre-roll, if available, in Matroska ticks */
 
-        Uint32 track_number;     /**< Track number in the WebM file (usually indexed from 1) */
-        SDL_MovieTrackType type; /**< Track type (video or audio) */
+        Uint32 track_number;      /**< Track number in the WebM file (usually indexed from 1) */
+        GleedMovieTrackType type; /**< Track type (video or audio) */
 
         Uint32 total_frames; /**< Total number of frames in the track */
         Uint32 total_bytes;  /**< Total number of bytes in the track */
@@ -135,12 +135,12 @@ extern "C"
         double audio_output_frequency; /**< Audio output frequency, non-zero only for audio tracks */
         Uint32 audio_channels;         /**< Number of audio channels, non-zero only for audio tracks */
         Uint32 audio_bit_depth;        /**< Audio bit depth, non-zero only for audio tracks */
-    } SDL_MovieTrack;
+    } GleedMovieTrack;
 
     /**
      * Audio sample type
      */
-    typedef float SDL_MovieAudioSample;
+    typedef float GleedMovieAudioSample;
 
     /**
      * Open movie (.webm) file
@@ -151,56 +151,56 @@ extern "C"
      *
      * \param file Path to .webm file
      *
-     * \returns Pointer to prepared SDL_Movie, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to prepared GleedMovie, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern SDL_Movie *SDLMovie_Open(const char *file);
+    extern GleedMovie *GleedOpen(const char *file);
 
     /**
      * Open movie (.webm) file from SDL IO stream
      *
-     * Follows the same rules as SDLMovie_Open, but reads the file from an SDL IO stream.
-     * Under the hood, actually SDLMovie_Open is a wrapper around this function.
+     * Follows the same rules as GleedOpen, but reads the file from an SDL IO stream.
+     * Under the hood, actually GleedOpen is a wrapper around this function.
      *
      * If you provide custom IO stream, make sure it is seekable and readable.
      *
      * \param io SDL IO stream for the .webm file
      *
-     * \returns Pointer to prepared SDL_Movie, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to prepared GleedMovie, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern SDL_Movie *SDLMovie_OpenIO(SDL_IOStream *io);
+    extern GleedMovie *GleedOpenIO(SDL_IOStream *io);
 
     /**
      * Free (release) a movie instance
      *
      * Must be called after you no longer need the movie instance to cleanup its resources, including all dynamic memory allocations.
      *
-     * SDL_Movie pointer is no longer valid after this call.
+     * GleedMovie pointer is no longer valid after this call.
      *
-     * \param movie SDL_Movie instance to free
+     * \param movie GleedMovie instance to free
      * \param closeio If true, will close the SDL IO stream associated with the movie
      */
-    extern void SDLMovie_FreeMovie(SDL_Movie *movie, bool closeio);
+    extern void GleedFreeMovie(GleedMovie *movie, bool closeio);
 
     /**
      * Get a track from movie
      *
      * This function returns a pointer to the track structure of the movie, if you want to query its properties.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      * \param index Track index
      *
      * \returns Pointer to the track structure, or NULL if track does not exist or index is out of bounds
      */
-    extern const SDL_MovieTrack *SDLMovie_GetTrack(const SDL_Movie *movie, int index);
+    extern const GleedMovieTrack *GleedGetTrack(const GleedMovie *movie, int index);
 
     /**
      * Get the number of tracks in the movie (both video and audio)
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      *
      * \returns Number of tracks in the movie, or 0 if there are no tracks or movie is invalid
      */
-    extern int SDLMovie_GetTrackCount(const SDL_Movie *movie);
+    extern int GleedGetTrackCount(const GleedMovie *movie);
 
     /**
      * Select a movie track
@@ -216,16 +216,16 @@ extern "C"
      * Please note, that the passed track index is not the same as the track number in the movie file,
      * as some tracks may be skipped (e.g. subtitles or ones which are not supported) - it is zero indexed.
      *
-     * You can use SDLMovie_GetTrack and SDLMovie_GetTrackCount to query available tracks.
+     * You can use GleedGetTrack and GleedGetTrackCount to query available tracks.
      *
      * It's recommended to call this function BEFORE decoding any frames, as some codecs are stateful and require
      * continuous decoding.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      * \param type Track type (video or audio)
      * \param track Track index to select
      */
-    extern void SDLMovie_SelectTrack(SDL_Movie *movie, SDL_MovieTrackType type, int track);
+    extern void GleedSelectTrack(GleedMovie *movie, GleedMovieTrackType type, int track);
 
     /**
      * Create a playback texture
@@ -239,14 +239,14 @@ extern "C"
      * Texture format is SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING access mode
      * and the size is the same as the video frame size.
      *
-     * Contents of the texture can be easily updated with SDLMovie_UpdatePlaybackTexture function.
+     * Contents of the texture can be easily updated with GleedUpdatePlaybackTexture function.
      *
-     * \param movie SDL_Movie instance with configured video track
+     * \param movie GleedMovie instance with configured video track
      * \param renderer SDL_Renderer instance to create the texture for
      *
-     * \returns SDL_Texture instance for playback, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns SDL_Texture instance for playback, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern SDL_Texture *SDLMovie_CreatePlaybackTexture(SDL_Movie *movie, SDL_Renderer *renderer);
+    extern SDL_Texture *GleedCreatePlaybackTexture(GleedMovie *movie, SDL_Renderer *renderer);
 
     /**
      * Update playback texture with the current video frame
@@ -261,34 +261,34 @@ extern "C"
      *
      * This function will result in error if there is no decoded video frame available.
      *
-     * \param movie SDL_Movie instance with configured video track and decoded video frame
+     * \param movie GleedMovie instance with configured video track and decoded video frame
      * \param texture SDL_Texture instance to update with video frame
      *
-     * \returns True on success, false on error. Call SDLMovie_GetError to get the error message.
+     * \returns True on success, false on error. Call GleedGetError to get the error message.
      */
-    extern bool SDLMovie_UpdatePlaybackTexture(SDL_Movie *movie, SDL_Texture *texture);
+    extern bool GleedUpdatePlaybackTexture(GleedMovie *movie, SDL_Texture *texture);
 
     /**
      * Check if there is a next video frame available
      *
-     * If there is, you may call SDLMovie_NextVideoFrame.
+     * If there is, you may call GleedNextVideoFrame.
      *
      * \returns true if there is a next video frame available, false otherwise or if there is an error.
      */
-    extern bool SDLMovie_HasNextVideoFrame(SDL_Movie *movie);
+    extern bool GleedHasNextVideoFrame(GleedMovie *movie);
 
     /**
      * Decodes current video frame of the movie.
      *
      * You should call this function before getting the video frame surface or updating playback textures.
      *
-     * After successful decode, you can get the video frame surface with SDLMovie_GetVideoFrameSurface.
-     * You should also call SDLMovie_NextVideoFrame to move to the next frame.
+     * After successful decode, you can get the video frame surface with GleedGetVideoFrameSurface.
+     * You should also call GleedNextVideoFrame to move to the next frame.
      *
-     * \param movie SDL_Movie instance with configured video track
-     * \return True on success, false on error. Call SDLMovie_GetError to get the error message.
+     * \param movie GleedMovie instance with configured video track
+     * \return True on success, false on error. Call GleedGetError to get the error message.
      */
-    extern bool SDLMovie_DecodeVideoFrame(SDL_Movie *movie);
+    extern bool GleedDecodeVideoFrame(GleedMovie *movie);
 
     /**
      * Get the current video frame surface
@@ -296,44 +296,44 @@ extern "C"
      * This function returns the current video frame surface, which contains the decoded video frame pixels,
      * that you can use for rendering the video frame.
      *
-     * Of course, you must decode a frame with SDLMovie_DecodeVideoFrame before calling this function.
+     * Of course, you must decode a frame with GleedDecodeVideoFrame before calling this function.
      *
-     * If you are using SDL_Renderer, you may use SDLMovie_CreatePlaybackTexture and SDLMovie_UpdatePlaybackTexture functions
+     * If you are using SDL_Renderer, you may use GleedCreatePlaybackTexture and GleedUpdatePlaybackTexture functions
      * respectively to create and update a SDL_Texture for playback.
      *
      * The format of the surface is SDL_PIXELFORMAT_RGB24, and the size is the same as the video frame size.
      *
-     * The surface will be modified by the next call to SDLMovie_DecodeVideoFrame.
+     * The surface will be modified by the next call to GleedDecodeVideoFrame.
      *
-     * \param movie SDL_Movie instance with configured video track and decoded video frame
-     * \return SDL_Surface instance with the video frame pixels, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \param movie GleedMovie instance with configured video track and decoded video frame
+     * \return SDL_Surface instance with the video frame pixels, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern const SDL_Surface *SDLMovie_GetVideoFrameSurface(SDL_Movie *movie);
+    extern const SDL_Surface *GleedGetVideoFrameSurface(GleedMovie *movie);
 
     /**
      * Move to the next video frame
      *
-     * This function should be called after decoding the current video frame with SDLMovie_DecodeVideoFrame, and
+     * This function should be called after decoding the current video frame with GleedDecodeVideoFrame, and
      * (optionally) rendering it's contents, although this is not required.
      *
-     * After calling this function, you can check if there is a next video frame available with SDLMovie_HasNextVideoFrame.
+     * After calling this function, you can check if there is a next video frame available with GleedHasNextVideoFrame.
      *
      * Calling this function when there are no more video frames left will have no effect.
      *
-     * \param movie SDL_Movie instance with configured video track
+     * \param movie GleedMovie instance with configured video track
      */
-    extern void SDLMovie_NextVideoFrame(SDL_Movie *movie);
+    extern void GleedNextVideoFrame(GleedMovie *movie);
 
     /**
      * Check if there is a next audio frame available
      *
      * Each audio frame may contain multiple encoded audio samples.
      *
-     * If there is, you may call SDLMovie_NextAudioFrame.
+     * If there is, you may call GleedNextAudioFrame.
      *
      * \returns true if there is a next audio frame available, false otherwise or if there is an error.
      */
-    extern bool SDLMovie_HasNextAudioFrame(SDL_Movie *movie);
+    extern bool GleedHasNextAudioFrame(GleedMovie *movie);
 
     /**
      * Decodes current audio frame of the movie.
@@ -341,23 +341,23 @@ extern "C"
      * You should call this function before getting the audio samples.
      * Movie should have an audio track selected.
      *
-     * After successful decode, you can get the audio samples with SDLMovie_GetAudioSamples.
+     * After successful decode, you can get the audio samples with GleedGetAudioSamples.
      *
-     * You should also call SDLMovie_NextAudioFrame to move to the next frame.
+     * You should also call GleedNextAudioFrame to move to the next frame.
      *
-     * \param movie SDL_Movie instance with configured audio track
-     * \return True on success, false on error. Call SDLMovie_GetError to get the error message.
+     * \param movie GleedMovie instance with configured audio track
+     * \return True on success, false on error. Call GleedGetError to get the error message.
      */
-    extern bool SDLMovie_DecodeAudioFrame(SDL_Movie *movie);
+    extern bool GleedDecodeAudioFrame(GleedMovie *movie);
 
     /**
      * Get the audio samples of the current audio frame
      *
      * This function returns a pointer to buffer of decoded PCM audio samples for current frame.
-     * The buffer is valid until the next call to SDLMovie_DecodeAudioFrame.
+     * The buffer is valid until the next call to GleedDecodeAudioFrame.
      *
      * You can directly queue the samples for playback via SDL_PutAudioStreamData into
-     * a SDL_AudioStream that has the correct spec, obtained from SDLMovie_GetAudioSpec - the
+     * a SDL_AudioStream that has the correct spec, obtained from GleedGetAudioSpec - the
      * samples buffer has interleaved format, supported by SDL audio.
      *
      * The size of the buffer in bytes is returned in the size parameter,
@@ -365,32 +365,32 @@ extern "C"
      *
      * On error, both size and count will be set to 0.
      *
-     * \param movie SDL_Movie instance with configured audio track and decoded audio frame
+     * \param movie GleedMovie instance with configured audio track and decoded audio frame
      * \param size Pointer to store the size of the buffer in bytes, or NULL if not needed
      * \param count Pointer to store the number of samples in the buffer, or NULL if not needed
      *
-     * \returns Pointer to the buffer with audio samples, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to the buffer with audio samples, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern const SDL_MovieAudioSample *SDLMovie_GetAudioSamples(SDL_Movie *movie, size_t *size, int *count);
+    extern const GleedMovieAudioSample *GleedGetAudioSamples(GleedMovie *movie, size_t *size, int *count);
 
     /**
      * Move to the next audio frame
      *
-     * This function should be called after decoding the current audio frame with SDLMovie_DecodeAudioFrame.
+     * This function should be called after decoding the current audio frame with GleedDecodeAudioFrame.
      *
-     * After calling this function, you can check if there is a next audio frame available with SDLMovie_HasNextAudioFrame.
+     * After calling this function, you can check if there is a next audio frame available with GleedHasNextAudioFrame.
      *
      * Calling this function when there are no more audio frames left will have no effect.
      *
-     * \param movie SDL_Movie instance with configured audio track
+     * \param movie GleedMovie instance with configured audio track
      */
-    extern void SDLMovie_NextAudioFrame(SDL_Movie *movie);
+    extern void GleedNextAudioFrame(GleedMovie *movie);
 
     /**
      * Get audio specification of the movie
      *
      * This function returns the audio spec for the currently selected audio track in the movie.
-     * The resulting samples from SDLMovie_GetAudioSamples will follow this spec.
+     * The resulting samples from GleedGetAudioSamples will follow this spec.
      *
      * You may pass this audio spec to SDL Audio functions to create a matching audio stream/device.
      *
@@ -398,9 +398,9 @@ extern "C"
      *
      * The returned pointer is valid until the movie is freed.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      */
-    extern const SDL_AudioSpec *SDLMovie_GetAudioSpec(SDL_Movie *movie);
+    extern const SDL_AudioSpec *GleedGetAudioSpec(GleedMovie *movie);
 
     /**
      * Seek to a specific frame in the movie
@@ -411,10 +411,10 @@ extern "C"
      * If both audio and video tracks are present, it will seek to the nearest keyframe of the video track
      * and sync the audio track to the video track.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      * \param frame Frame number to seek to
      */
-    extern void SDLMovie_SeekFrame(SDL_Movie *movie, Uint32 frame);
+    extern void GleedSeekFrame(GleedMovie *movie, Uint32 frame);
 
     /**
      * Get the last frame decode time in milliseconds
@@ -422,29 +422,29 @@ extern "C"
      * This function returns the time in milliseconds it took to decode the last video frame,
      * which you can use for benchmarking or performance monitoring.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      *
      * \returns Time in milliseconds, 0 if no frame was decoded yet or on error.
      */
-    extern Uint32 SDLMovie_GetLastFrameDecodeTime(SDL_Movie *movie);
+    extern Uint32 GleedGetLastFrameDecodeTime(GleedMovie *movie);
 
     /**
      * Get the total number of video frames in the movie
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      * \returns Total number of video frames in the movie, or 0 on error.
      */
-    extern Uint32 SDLMovie_GetTotalVideoFrames(SDL_Movie *movie);
+    extern Uint32 GleedGetTotalVideoFrames(GleedMovie *movie);
 
     /**
      * Get the current video frame number
      *
-     * This number is incremented with each call to SDLMovie_NextVideoFrame.
+     * This number is incremented with each call to GleedNextVideoFrame.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      * \returns Current video frame number, or 0 on error.
      */
-    extern Uint32 SDLMovie_GetCurrentFrame(SDL_Movie *movie);
+    extern Uint32 GleedGetCurrentFrame(GleedMovie *movie);
 
     /**
      * Get the video size of the movie
@@ -454,11 +454,11 @@ extern "C"
      *
      * If there is an error, width and height parameters will not be changed.
      *
-     * \param movie SDL_Movie instance
+     * \param movie GleedMovie instance
      * \param w Pointer to store the width of the video frames, or NULL if not needed
      * \param h Pointer to store the height of the video frames, or NULL if not needed
      */
-    extern void SDLMovie_GetVideoSize(SDL_Movie *movie, int *w, int *h);
+    extern void GleedGetVideoSize(GleedMovie *movie, int *w, int *h);
 
     /**
      * Get the error message
@@ -469,7 +469,7 @@ extern "C"
      *
      * \returns Error message string, or NULL if there was no error.
      */
-    extern const char *SDLMovie_GetError();
+    extern const char *GleedGetError();
 
     /**
      * Preload audio stream
@@ -482,29 +482,29 @@ extern "C"
      * As audio tracks are usually much smaller than video tracks, this function is usually safe to call,
      * and probably even recommended for smooth playback.
      *
-     * \param movie SDL_Movie instance with configured audio track
-     * \returns True on success, false on error. Call SDLMovie_GetError to get the error message.
+     * \param movie GleedMovie instance with configured audio track
+     * \returns True on success, false on error. Call GleedGetError to get the error message.
      *
      */
-    extern bool SDLMovie_PreloadAudioStream(SDL_Movie *movie);
+    extern bool GleedPreloadAudioStream(GleedMovie *movie);
 
     /*
         Movie player structure
 
-        SDL_MoviePlayer is a high level abstraction over SDL_Movie, which allows you to play back movies
+        GleedMoviePlayer is a high level abstraction over GleedMovie, which allows you to play back movies
         with respect to audio and video synchronization, and provides easy to use API for playback control.
 
-        Movie player can be created with SDLMovie_CreatePlayer() and must be freed with SDLMovie_FreePlayer().
+        Movie player can be created with GleedCreatePlayer() and must be freed with GleedFreePlayer().
 
         Opaque structure, do not modify its members directly.
     */
-    typedef struct SDL_MoviePlayer SDL_MoviePlayer;
+    typedef struct GleedMoviePlayer GleedMoviePlayer;
 
 /**
- * This constant can be used to as second argument to SDLMovie_UpdatePlayer to
+ * This constant can be used to as second argument to GleedUpdatePlayer to
  * let player decide the time delta automatically.
  */
-#define SDL_MOVIE_PLAYER_TIME_DELTA_AUTO -1
+#define GLEED_PLAYER_TIME_DELTA_AUTO -1
 
     /**
      * Create a player from an existing movie
@@ -513,37 +513,37 @@ extern "C"
      * It's strongly recommended to NOT modify the movie instance while the player is active,
      * and instead use the player API.
      *
-     * In order to advance the playback, you must call SDLMovie_UpdatePlayer with the time delta in milliseconds.
+     * In order to advance the playback, you must call GleedUpdatePlayer with the time delta in milliseconds.
      *
-     * Player must be freed with SDLMovie_FreePlayer before freeing the movie itself.
+     * Player must be freed with GleedFreePlayer before freeing the movie itself.
      *
-     * \param mov SDL_Movie instance
+     * \param mov GleedMovie instance
      *
-     * \returns Pointer to the player instance, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to the player instance, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern SDL_MoviePlayer *SDLMovie_CreatePlayer(SDL_Movie *mov);
+    extern GleedMoviePlayer *GleedCreatePlayer(GleedMovie *mov);
 
     /**
      * Create a player from path
      *
-     * Helper method to create a player from a file path. See SDLMovie_CreatePlayer for more information.
+     * Helper method to create a player from a file path. See GleedCreatePlayer for more information.
      *
      * \param path Path to the .webm file
      *
-     * \returns Pointer to the player instance, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to the player instance, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern SDL_MoviePlayer *SDLMovie_CreatePlayerFromPath(const char *path);
+    extern GleedMoviePlayer *GleedCreatePlayerFromPath(const char *path);
 
     /**
      * Create a player from SDL IO stream
      *
-     * Helper method to create a player from an SDL IO stream. See SDLMovie_CreatePlayer for more information.
+     * Helper method to create a player from an SDL IO stream. See GleedCreatePlayer for more information.
      *
      * \param io SDL IO stream for the .webm file
      *
-     * \returns Pointer to the player instance, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to the player instance, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern SDL_MoviePlayer *SDLMovie_CreatePlayerFromIO(SDL_IOStream *io);
+    extern GleedMoviePlayer *GleedCreatePlayerFromIO(SDL_IOStream *io);
 
     /**
      * Set player audio output device
@@ -562,12 +562,12 @@ extern "C"
      * If you want to stop audio output, you may pass 0 as the device id.
      * This will destroy the audio stream (if it was present) and stop automatic audio output.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      * \param dev SDL_AudioDeviceID of the opened audio device to output audio to
      *
-     * \returns True on success, false on error. Call SDLMovie_GetError to get the error message.
+     * \returns True on success, false on error. Call GleedGetError to get the error message.
      */
-    extern bool SDLMovie_SetPlayerAudioOutput(SDL_MoviePlayer *player, SDL_AudioDeviceID dev);
+    extern bool GleedSetPlayerAudioOutput(GleedMoviePlayer *player, SDL_AudioDeviceID dev);
 
     /**
      * Set player video output texture
@@ -575,19 +575,19 @@ extern "C"
      * This function will set the output texture for the player,
      * which will be automatically updated with decoded frame pixels during player update.
      *
-     * Here apply the sames rules as with SDLMovie_UpdatePlaybackTexture - the texture must be compatible with the video format.
+     * Here apply the sames rules as with GleedUpdatePlaybackTexture - the texture must be compatible with the video format.
      *
-     * So it's strongly recommended to pass the texture created with SDLMovie_CreatePlaybackTexture here.
+     * So it's strongly recommended to pass the texture created with GleedCreatePlaybackTexture here.
      *
      * You may pass NULL to disable automatic texture update.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      * \param texture SDL_Texture instance to update with video frame
      *
-     * \returns True on success, false on error. Call SDLMovie_GetError to get the error message.
+     * \returns True on success, false on error. Call GleedGetError to get the error message.
      */
-    extern bool SDLMovie_SetPlayerVideoOutputTexture(
-        SDL_MoviePlayer *player,
+    extern bool GleedSetPlayerVideoOutputTexture(
+        GleedMoviePlayer *player,
         SDL_Texture *texture);
 
     /*
@@ -595,11 +595,11 @@ extern "C"
     */
     typedef enum
     {
-        SDL_MOVIE_PLAYER_UPDATE_NONE = 0,       /**< No update was performed */
-        SDL_MOVIE_PLAYER_UPDATE_AUDIO = 1 << 1, /**< Audio samples were updated */
-        SDL_MOVIE_PLAYER_UPDATE_VIDEO = 1 << 2, /**< Video frame was updated */
-        SDL_MOVIE_PLAYER_UPDATE_ERROR = 1 << 3, /**< An error occurred during update */
-    } SDL_MoviePlayerUpdateResult;
+        GLEED_PLAYER_UPDATE_NONE = 0,       /**< No update was performed */
+        GLEED_PLAYER_UPDATE_AUDIO = 1 << 1, /**< Audio samples were updated */
+        GLEED_PLAYER_UPDATE_VIDEO = 1 << 2, /**< Video frame was updated */
+        GLEED_PLAYER_UPDATE_ERROR = 1 << 3, /**< An error occurred during update */
+    } GleedMoviePlayerUpdateResult;
 
     /**
      * Update the player
@@ -610,182 +610,182 @@ extern "C"
      *
      * 1) Advance movie frames counters
      * 2) Decode needed video and audio frames
-     * 3) If an output texture was set with SDLMovie_SetPlayerVideoOutputTexture - the texture will be updated with new video frame pixels.
-     * 4) If an audio output device was set with SDLMovie_SetPlayerAudioOutput - the audio samples will be queued into the audio stream.
+     * 3) If an output texture was set with GleedSetPlayerVideoOutputTexture - the texture will be updated with new video frame pixels.
+     * 4) If an audio output device was set with GleedSetPlayerAudioOutput - the audio samples will be queued into the audio stream.
      *
      * It's usually should be called in your application loop once per frame (your app's frame, not a movie one).
      *
      * If the player is paused or the movie ended, no updates will be performed.
      *
-     * If you pass SDL_MOVIE_PLAYER_TIME_DELTA_AUTO as the time delta, the player will decide the time delta automatically -
+     * If you pass GLEED_PLAYER_TIME_DELTA_AUTO as the time delta, the player will decide the time delta automatically -
      * by using SDL_GetTicks() and the last frame time it remembers.
      *
      * Player may queue more audio samples than needed for the current frame in order to have a buffer for smoother experience.
      *
-     * Returned value is a bitmask of SDL_MoviePlayerUpdateResult values. On error, only SDL_MOVIE_PLAYER_UPDATE_ERROR will be set.
+     * Returned value is a bitmask of GleedMoviePlayerUpdateResult values. On error, only GLEED_PLAYER_UPDATE_ERROR will be set.
      *
-     * \param player SDL_MoviePlayer instance
-     * \param time_delta_ms Time delta in milliseconds since last frame, or SDL_MOVIE_PLAYER_TIME_DELTA_AUTO to let player decide automatically
+     * \param player GleedMoviePlayer instance
+     * \param time_delta_ms Time delta in milliseconds since last frame, or GLEED_PLAYER_TIME_DELTA_AUTO to let player decide automatically
      *
-     * \returns SDL_MoviePlayerUpdateResult bitmask of the update result, or SDL_MOVIE_PLAYER_UPDATE_ERROR on error. Call SDLMovie_GetError to get the error message.
+     * \returns GleedMoviePlayerUpdateResult bitmask of the update result, or GLEED_PLAYER_UPDATE_ERROR on error. Call GleedGetError to get the error message.
      */
-    extern SDL_MoviePlayerUpdateResult SDLMovie_UpdatePlayer(SDL_MoviePlayer *player, int time_delta_ms);
+    extern GleedMoviePlayerUpdateResult GleedUpdatePlayer(GleedMoviePlayer *player, int time_delta_ms);
 
     /**
      * Get the player audio samples
      *
-     * This function is similar to SDLMovie_GetAudioSamples, returning a pointer to decoded interleaved PCM audio samples for the current frame.
+     * This function is similar to GleedGetAudioSamples, returning a pointer to decoded interleaved PCM audio samples for the current frame.
      *
-     * Please note, the buffer is only valid until the next call to SDLMovie_UpdatePlayer - the values may be overwritten after that.
+     * Please note, the buffer is only valid until the next call to GleedUpdatePlayer - the values may be overwritten after that.
      *
      * Samples can be directly passed to SDL_PutAudioStreamData.
      *
-     * If you have set an audio output with SDLMovie_SetPlayerAudioOutput,
+     * If you have set an audio output with GleedSetPlayerAudioOutput,
      * the samples will be queued automatically and this function should not be called, as it will return 0 samples.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      * \param count Pointer to store the number of samples in the buffer, or NULL if not needed
      *
-     * \returns Pointer to the buffer with audio samples, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns Pointer to the buffer with audio samples, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern const SDL_MovieAudioSample *SDLMovie_GetPlayerAvailableAudioSamples(
-        SDL_MoviePlayer *player,
+    extern const GleedMovieAudioSample *GleedGetPlayerAvailableAudioSamples(
+        GleedMoviePlayer *player,
         int *count);
 
     /**
      * Get the player current video frame surface
      *
-     * This function is similar to SDLMovie_GetVideoFrameSurface, returning the current video frame surface.
+     * This function is similar to GleedGetVideoFrameSurface, returning the current video frame surface.
      *
-     * Please note, the surface is only valid until the next call to SDLMovie_UpdatePlayer - the values may be overwritten after that.
+     * Please note, the surface is only valid until the next call to GleedUpdatePlayer - the values may be overwritten after that.
      *
-     * If you have set a video output with SDLMovie_SetPlayerVideoOutputTexture, the texture will be updated automatically with
+     * If you have set a video output with GleedSetPlayerVideoOutputTexture, the texture will be updated automatically with
      * the contents of this surface and there is no need to call this function.
      *
      * The size of the surface is equal to movie's video track dimensions.
      *
      * You may use this function to get current video frame to render if you are not using SDL_Renderer directly.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
-     * \returns SDL_Surface instance with the video frame pixels, or NULL on error. Call SDLMovie_GetError to get the error message.
+     * \returns SDL_Surface instance with the video frame pixels, or NULL on error. Call GleedGetError to get the error message.
      */
-    extern const SDL_Surface *SDLMovie_GetPlayerCurrentVideoFrameSurface(
-        SDL_MoviePlayer *player);
+    extern const SDL_Surface *GleedGetPlayerCurrentVideoFrameSurface(
+        GleedMoviePlayer *player);
 
     /**
      * Pause the player
      *
      * This function will pause the player, stopping the playback until it is resumed.
      *
-     * Calls to SDLMovie_UpdatePlayer will be basically no-op.
+     * Calls to GleedUpdatePlayer will be basically no-op.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      */
-    extern void SDLMovie_PausePlayer(SDL_MoviePlayer *player);
+    extern void GleedPausePlayer(GleedMoviePlayer *player);
 
     /**
      * Resume the player
      *
      * This function will resume the player, continuing the playback.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      */
-    extern void SDLMovie_ResumePlayer(SDL_MoviePlayer *player);
+    extern void GleedResumePlayer(GleedMoviePlayer *player);
 
     /**
      * Check if the player is paused
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
      * \returns True if the player is paused, false otherwise
      */
-    extern bool SDLMovie_IsPlayerPaused(SDL_MoviePlayer *player);
+    extern bool GleedIsPlayerPaused(GleedMoviePlayer *player);
 
     /**
      * Check if the player has finished playback
      *
      * Player will automatically stop when it reaches the end of the movie and there no more frames to decode.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
      * \returns True if the player has finished playback, false otherwise
      */
-    extern bool SDLMovie_HasPlayerFinished(SDL_MoviePlayer *player);
+    extern bool GleedHasPlayerFinished(GleedMoviePlayer *player);
 
     /**
      * Get the player current time in seconds
      *
      * This function returns the current time of the player in seconds - amount of time since movie start.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
      * \returns Current time in seconds, or 0.0 on error.
      */
-    extern float SDLMovie_GetPlayerCurrentTimeSeconds(SDL_MoviePlayer *player);
+    extern float GleedGetPlayerCurrentTimeSeconds(GleedMoviePlayer *player);
 
     /**
      * Get the player current time in milliseconds
      *
      * This function returns the current time of the player in milliseconds - amount of time since movie start.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
      * \returns Current time in milliseconds, or 0 on error.
      */
-    extern Uint64 SDLMovie_GetPlayerCurrentTime(SDL_MoviePlayer *player);
+    extern Uint64 GleedGetPlayerCurrentTime(GleedMoviePlayer *player);
 
     /**
      * Check if the player has audio enabled
      *
-     * You can modify this with SDLMovie_SetPlayerAudioEnabled
+     * You can modify this with GleedSetPlayerAudioEnabled
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
      * \returns True if the player has audio enabled, false otherwise
      */
-    extern bool SDLMovie_IsPlayerAudioEnabled(SDL_MoviePlayer *player);
+    extern bool GleedIsPlayerAudioEnabled(GleedMoviePlayer *player);
 
     /**
      * Check if the player has video enabled
      *
-     * You can modify this with SDLMovie_SetPlayerVideoEnabled
+     * You can modify this with GleedSetPlayerVideoEnabled
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      *
      * \returns True if the player has video enabled, false otherwise
      */
-    extern bool SDLMovie_IsPlayerVideoEnabled(SDL_MoviePlayer *player);
+    extern bool GleedIsPlayerVideoEnabled(GleedMoviePlayer *player);
 
     /**
      * Set player audio enabled
      *
      * This function allows you to enable or disable audio playback in the player.
      *
-     * It's strongly recommended to call this function before first call to SDLMovie_UpdatePlayer,
+     * It's strongly recommended to call this function before first call to GleedUpdatePlayer,
      * as this function disabled audio decoding and output completely.
      *
      * If the player has no audio track, this function will have no effect.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      * \param enabled True to enable audio playback, false to disable
      */
-    extern void SDLMovie_SetPlayerAudioEnabled(SDL_MoviePlayer *player, bool enabled);
+    extern void GleedSetPlayerAudioEnabled(GleedMoviePlayer *player, bool enabled);
 
     /**
      * Set player video enabled
      *
      * This function allows you to enable or disable video playback in the player.
      *
-     * It's strongly recommended to call this function before first call to SDLMovie_UpdatePlayer,
+     * It's strongly recommended to call this function before first call to GleedUpdatePlayer,
      * as this function disabled video decoding and output completely.
      *
      * If the player has no video track, this function will have no effect.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      * \param enabled True to enable video playback, false to disable
      */
-    extern void SDLMovie_SetPlayerVideoEnabled(SDL_MoviePlayer *player, bool enabled);
+    extern void GleedSetPlayerVideoEnabled(GleedMoviePlayer *player, bool enabled);
 
     /**
      * Free the player
@@ -794,9 +794,9 @@ extern "C"
      *
      * It will free all resources associated with the player, but NOT the movie instance attached to it.
      *
-     * \param player SDL_MoviePlayer instance
+     * \param player GleedMoviePlayer instance
      */
-    extern void SDLMovie_FreePlayer(SDL_MoviePlayer *player);
+    extern void GleedFreePlayer(GleedMoviePlayer *player);
 
 #ifdef __cplusplus
 }

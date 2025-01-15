@@ -1,5 +1,4 @@
-#include <SDL_movie.h>
-#include "SDL_movie_internal.h"
+#include "gleed_movie_internal.h"
 
 #include <vpx/vpx_decoder.h>
 #include <vpx/vp8dx.h>
@@ -63,7 +62,7 @@ static SDL_Colorspace vpx_cs_to_sdl_cs(vpx_color_space_t cs)
     }
 }
 
-bool SDLMovie_Decode_VPX(SDL_Movie *movie)
+bool GleedDecodeVPX(GleedMovie *movie)
 {
     Uint64 decode_start = SDL_GetTicks();
 
@@ -77,7 +76,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     VPXContext *ctx = (VPXContext *)movie->vpx_context;
 
-    if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP8)
+    if (movie->video_codec == GLEED_CODEC_TYPE_VP8)
     {
         if (!ctx->vp8)
         {
@@ -87,14 +86,14 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
             if (vp8_err != VPX_CODEC_OK)
             {
-                return SDLMovie_SetError("Failed to initialize VP8 decoder: %s", vpx_codec_err_to_string(vp8_err));
+                return GleedSetError("Failed to initialize VP8 decoder: %s", vpx_codec_err_to_string(vp8_err));
             }
         }
 
         vpi = ctx->vp8;
         codec = &ctx->codec8;
     }
-    else if (movie->video_codec == SDL_MOVIE_CODEC_TYPE_VP9)
+    else if (movie->video_codec == GLEED_CODEC_TYPE_VP9)
     {
         if (!ctx->vp9)
         {
@@ -104,7 +103,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
             if (vp9_err != VPX_CODEC_OK)
             {
-                return SDLMovie_SetError("Failed to initialize VP9 decoder: %s", vpx_codec_err_to_string(vp9_err));
+                return GleedSetError("Failed to initialize VP9 decoder: %s", vpx_codec_err_to_string(vp9_err));
             }
         }
 
@@ -114,14 +113,14 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     if (!vpi)
     {
-        return SDLMovie_SetError("Failed to initialize VPX decoder");
+        return GleedSetError("Failed to initialize VPX decoder");
     }
 
     vpx_codec_err_t decode_err = vpx_codec_decode(codec, movie->encoded_video_frame, movie->encoded_video_frame_size, NULL, 0);
 
     if (decode_err != VPX_CODEC_OK)
     {
-        return SDLMovie_SetError("Failed to decode VPX frame: %s, %s", vpx_codec_err_to_string(decode_err), vpx_codec_error_detail(codec));
+        return GleedSetError("Failed to decode VPX frame: %s, %s", vpx_codec_err_to_string(decode_err), vpx_codec_error_detail(codec));
     }
 
     vpx_codec_iter_t iter = NULL;
@@ -136,7 +135,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
 
     if (!img)
     {
-        return SDLMovie_SetError("Failed to get decoded VPX frame - received no image");
+        return GleedSetError("Failed to get decoded VPX frame - received no image");
     }
 
     if (!movie->current_frame_surface)
@@ -219,7 +218,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
             movie->current_frame_surface->pixels,
             movie->current_frame_surface->pitch))
     {
-        SDLMovie_SetError("Failed to convert VPX frame to RGB: %s", SDL_GetError());
+        GleedSetError("Failed to convert VPX frame to RGB: %s", SDL_GetError());
         SDL_free(convert_buffer);
 
         return false;
@@ -232,7 +231,7 @@ bool SDLMovie_Decode_VPX(SDL_Movie *movie)
     return true;
 }
 
-void SDLMovie_Close_VPX(SDL_Movie *movie)
+void GleedCloseVPX(GleedMovie *movie)
 {
     if (movie->vpx_context)
     {
